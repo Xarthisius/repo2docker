@@ -196,6 +196,8 @@ class BuildPack:
     def __init__(self):
         self.log = logging.getLogger("repo2docker")
         self.appendix = ""
+        self.entrypoint_file = ENTRYPOINT_FILE
+        self.template = TEMPLATE
         self.labels = {}
         if sys.platform.startswith("win"):
             self.log.warning(
@@ -454,7 +456,7 @@ class BuildPack:
         """
         Render BuildPack into Dockerfile
         """
-        t = jinja2.Template(TEMPLATE)
+        t = jinja2.Template(self.template)
 
         build_script_directives = []
         last_user = "root"
@@ -524,7 +526,7 @@ class BuildPack:
             src_path = os.path.join(os.path.dirname(__file__), *src_parts)
             tar.add(src_path, src, filter=_filter_tar)
 
-        tar.add(ENTRYPOINT_FILE, "repo2docker-entrypoint", filter=_filter_tar)
+        tar.add(self.entrypoint_file, "repo2docker-entrypoint", filter=_filter_tar)
 
         tar.add(".", "src/", filter=_filter_tar)
 
