@@ -516,17 +516,17 @@ class BuildPack:
         file on host.
         """
         if not os.path.isabs(src_path):
-            src_parts = src_path.split('/')
+            src_parts = src_path.split("/")
             src_path = os.path.join(os.path.dirname(__file__), *src_parts)
 
-        src_path_hash = hashlib.sha256(src_path.encode('utf-8')).hexdigest()
+        src_path_hash = hashlib.sha256(src_path.encode("utf-8")).hexdigest()
         safe_chars = set(string.ascii_letters + string.digits)
 
         def escape(s):
-            return escapism.escape(s, safe=safe_chars, escape_char='-')
+            return escapism.escape(s, safe=safe_chars, escape_char="-")
 
         src_path_slug = escape(src_path)
-        filename = 'build_script_files/{name}-{hash}'
+        filename = "build_script_files/{name}-{hash}"
         return (
             filename.format(
                 name=src_path_slug[: 255 - hash_length - 20],
@@ -564,9 +564,8 @@ class BuildPack:
             return tar
 
         for src in sorted(self.get_build_script_files()):
-            src_parts = src.split("/")
-            src_path = os.path.join(os.path.dirname(__file__), *src_parts)
-            tar.add(src_path, src, filter=_filter_tar)
+            dest_path, src_path = self.generate_build_context_filename(src)
+            tar.add(src_path, dest_path, filter=_filter_tar)
 
         tar.add(self.entrypoint_file, "repo2docker-entrypoint", filter=_filter_tar)
 
