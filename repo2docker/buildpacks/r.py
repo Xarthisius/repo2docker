@@ -65,7 +65,12 @@ class RBuildPack(PythonBuildPack):
         if not hasattr(self, "_checkpoint_date"):
             match = re.match(r"r-(\d\d\d\d)-(\d\d)-(\d\d)", self.runtime)
             if not match:
-                self._checkpoint_date = False
+                # no R snapshot date set through runtime.txt
+                # set the R runtime to the latest date that is guaranteed to
+                # be on MRAN across timezones
+                self._checkpoint_date = datetime.date.today() - datetime.timedelta(
+                    days=2
+                )
             else:
                 self._checkpoint_date = datetime.date(*[int(s) for s in match.groups()])
 
