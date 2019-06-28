@@ -29,14 +29,15 @@ from traitlets.config import Application
 
 from . import __version__
 from .buildpacks import (
-    PythonBuildPack,
-    DockerBuildPack,
-    LegacyBinderDockerBuildPack,
     CondaBuildPack,
+    DockerBuildPack,
     JuliaProjectTomlBuildPack,
     JuliaRequireBuildPack,
-    RBuildPack,
+    LegacyBinderDockerBuildPack,
     NixBuildPack,
+    PipfileBuildPack,
+    PythonBuildPack,
+    RBuildPack,
 )
 from . import contentproviders
 from .utils import ByteSpecification, chdir
@@ -98,6 +99,7 @@ class Repo2Docker(Application):
             NixBuildPack,
             RBuildPack,
             CondaBuildPack,
+            PipfileBuildPack,
             PythonBuildPack,
         ],
         config=True,
@@ -353,7 +355,8 @@ class Repo2Docker(Application):
     target_repo_dir = Unicode(
         "",
         help="""
-        Path inside the image where contents of the repositories are copied to.
+        Path inside the image where contents of the repositories are copied to,
+        and where all the build operations (such as postBuild) happen.
 
         Defaults to ${HOME} if not set
         """,
