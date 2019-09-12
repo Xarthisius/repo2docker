@@ -177,17 +177,9 @@ def get_argparser():
 
     argparser.add_argument("--target-repo-dir", help=Repo2Docker.target_repo_dir.help)
 
-    argparser.add_argument(
-        "--appendix",
-        type=str,
-        # help=self.traits()['appendix'].help,
-    )
+    argparser.add_argument("--appendix", type=str, help=Repo2Docker.appendix.help)
 
-    argparser.add_argument(
-        "--subdir",
-        type=str,
-        # help=self.traits()['subdir'].help,
-    )
+    argparser.add_argument("--subdir", type=str, help=Repo2Docker.subdir.help)
 
     argparser.add_argument(
         "--version",
@@ -196,7 +188,9 @@ def get_argparser():
         help="Print the repo2docker version and exit.",
     )
 
-    argparser.add_argument("--cache-from", action="append", default=[])
+    argparser.add_argument(
+        "--cache-from", action="append", default=[], help=Repo2Docker.cache_from.help
+    )
 
     argparser.add_argument(
         "--template",
@@ -328,6 +322,16 @@ def make_r2d(argv=None):
         r2d.user_id = args.user_id
     if args.user_name:
         r2d.user_name = args.user_name
+    if r2d.user_id == 0 and not r2d.dry_run:
+        print("Root as the primary user in the image is not permitted.")
+        print(
+            "The uid and the username of the user invoking repo2docker "
+            "is used to create a mirror account in the image by default. "
+            "To override that behavior pass --user-id <numeric_id> and "
+            " --user-name <string> to repo2docker.\n"
+            "Please see repo2docker --help for more details.\n"
+        )
+        sys.exit(1)
 
     if args.build_memory_limit:
         # if the string only contains numerals we assume it should be an int

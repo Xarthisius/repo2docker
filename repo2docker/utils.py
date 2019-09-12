@@ -3,6 +3,7 @@ from functools import partial
 import os
 import re
 import subprocess
+import chardet
 
 from shutil import copystat, copy2
 
@@ -68,6 +69,27 @@ def chdir(path):
         yield
     finally:
         os.chdir(old_dir)
+
+
+@contextmanager
+def open_guess_encoding(path):
+    """
+    Open a file in text mode, specifying its encoding,
+    that we guess using chardet.
+    """
+    detector = chardet.universaldetector.UniversalDetector()
+    with open(path, "rb") as f:
+        for line in f.readlines():
+            detector.feed(line)
+            if detector.done:
+                break
+    detector.close()
+
+    file = open(path, encoding=detector.result["encoding"])
+    try:
+        yield file
+    finally:
+        file.close()
 
 
 def validate_and_generate_port_mapping(port_mappings):
@@ -415,21 +437,45 @@ def deep_get(dikt, path):
 # Copyright (C) 2018 Alan Rubin.
 # Licensed under BSD-3-Clause license
 doi_regexp = re.compile(
-    "(doi:\s*|(?:https?://)?(?:dx\.)?doi\.org/)?(10\.\d+(.\d+)*/.+)$", flags=re.I
+    r"(doi:\s*|(?:https?://)?(?:dx\.)?doi\.org/)?(10\.\d+(.\d+)*/.+)$", flags=re.I
 )
 
 
 def is_doi(val):
     """Returns None if val doesn't match pattern of a DOI.
     http://en.wikipedia.org/wiki/Digital_object_identifier."""
-    print(type(val))
-    print(val)
     return doi_regexp.match(val)
 
 
 def normalize_doi(val):
     """Return just the DOI (e.g. 10.1234/jshd123)
-    from a val that could include a url or doi 
+    from a val that could include a url or doi
     (e.g. https://doi.org/10.1234/jshd123)"""
     m = doi_regexp.match(val)
     return m.group(2)
+
+
+def is_local_pip_requirement(line):
+    """Return whether a pip requirement (e.g. in requirements.txt file) references a local file"""
+    # trim comments and skip empty lines
+    line = line.split("#", 1)[0].strip()
+    if not line:
+        return False
+    if line.startswith(("-r", "-c")):
+        # local -r or -c references break isolation
+        return True
+    # strip off `-e, etc.`
+    if line.startswith("-"):
+        line = line.split(None, 1)[1]
+    if "file://" in line:
+        # file references break isolation
+        return True
+    if "://" in line:
+        # handle git://../local/file
+        path = line.split("://", 1)[1]
+    else:
+        path = line
+    if path.startswith("."):
+        # references a local file
+        return True
+    return False

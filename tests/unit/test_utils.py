@@ -6,6 +6,7 @@ import os
 from repo2docker import utils
 import pytest
 import subprocess
+import tempfile
 
 
 def test_capture_cmd_no_capture_success():
@@ -110,3 +111,29 @@ def test_normalize_doi():
     assert utils.normalize_doi("http://doi.org/10.1234/jshd123") == "10.1234/jshd123"
     assert utils.normalize_doi("https://doi.org/10.1234/jshd123") == "10.1234/jshd123"
     assert utils.normalize_doi("http://dx.doi.org/10.1234/jshd123") == "10.1234/jshd123"
+
+
+def test_open_guess_encoding():
+    data = "Rică nu știa să zică râu, rățușcă, rămurică."
+    with tempfile.NamedTemporaryFile(mode="wb") as test_file:
+        test_file.write(str.encode(data, "utf-16"))
+        test_file.seek(0)
+        with utils.open_guess_encoding(test_file.name) as fd:
+            assert fd.read() == data
+
+
+@pytest.mark.parametrize(
+    "req, is_local",
+    [
+        ("-r requirements.txt", True),
+        ("-e .", True),
+        ("file://subdir", True),
+        ("file://./subdir", True),
+        ("git://github.com/jupyter/repo2docker", False),
+        ("git+https://github.com/jupyter/repo2docker", False),
+        ("numpy", False),
+        ("# -e .", False),
+    ],
+)
+def test_local_pip_requirement(req, is_local):
+    assert utils.is_local_pip_requirement(req) == is_local
