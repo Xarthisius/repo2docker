@@ -7,7 +7,6 @@ Usage:
 
     python -m repo2docker https://github.com/you/your-repo
 """
-import errno
 import json
 import sys
 import logging
@@ -29,14 +28,15 @@ from traitlets.config import Application
 
 from . import __version__
 from .buildpacks import (
-    PythonBuildPack,
-    DockerBuildPack,
-    LegacyBinderDockerBuildPack,
     CondaBuildPack,
+    DockerBuildPack,
     JuliaProjectTomlBuildPack,
     JuliaRequireBuildPack,
-    RBuildPack,
+    LegacyBinderDockerBuildPack,
     NixBuildPack,
+    PipfileBuildPack,
+    PythonBuildPack,
+    RBuildPack,
 )
 from . import contentproviders
 from .utils import ByteSpecification, chdir
@@ -97,6 +97,7 @@ class Repo2Docker(Application):
             NixBuildPack,
             RBuildPack,
             CondaBuildPack,
+            PipfileBuildPack,
             PythonBuildPack,
         ],
         config=True,
@@ -352,7 +353,8 @@ class Repo2Docker(Application):
     target_repo_dir = Unicode(
         "",
         help="""
-        Path inside the image where contents of the repositories are copied to.
+        Path inside the image where contents of the repositories are copied to,
+        and where all the build operations (such as postBuild) happen.
 
         Defaults to ${HOME} if not set
         """,
@@ -687,17 +689,9 @@ class Repo2Docker(Application):
 
                 if not self.dry_run:
                     if self.user_id == 0:
-                        self.log.error(
-                            "Root as the primary user in the image is not permitted.\n"
+                        raise ValueError(
+                            "Root as the primary user in the image is not permitted."
                         )
-                        self.log.info(
-                            "The uid and the username of the user invoking repo2docker "
-                            "is used to create a mirror account in the image by default. "
-                            "To override that behavior pass --user-id <numeric_id> and "
-                            " --user-name <string> to repo2docker.\n"
-                            "Please see repo2docker --help for more details.\n"
-                        )
-                        sys.exit(errno.EPERM)
 
                     build_args = {
                         "NB_USER": self.user_name,

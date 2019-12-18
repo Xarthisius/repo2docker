@@ -92,7 +92,7 @@ ENV PATH {{ ':'.join(path) }}:${PATH}
 
 {% if build_script_files -%}
 # If scripts required during build are present, copy them
-{% for src, dst in build_script_files.items() %}
+{% for src, dst in build_script_files|dictsort %}
 COPY {{ src }} {{ dst }}
 {% endfor -%}
 {% endif -%}
@@ -116,12 +116,6 @@ WORKDIR ${REPO_DIR}
 # installs. See https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
 ENV PATH ${HOME}/.local/bin:${REPO_DIR}/.local/bin:${PATH}
 
-# Copy and chown stuff. This doubles the size of the repo, because
-# you can't actually copy as USER, only as root! Thanks, Docker!
-USER root
-COPY src/ ${REPO_DIR}
-RUN chown -R ${NB_USER}:${NB_USER} ${REPO_DIR}
-
 {% if env -%}
 # The rest of the environment
 {% for item in env -%}
@@ -129,9 +123,34 @@ ENV {{item[0]}} {{item[1]}}
 {% endfor -%}
 {% endif -%}
 
+# Run pre-assemble scripts! These are instructions that depend on the content
+# of the repository but don't access any files in the repository. By executing
+# them before copying the repository itself we can cache these steps. For
+# example installing APT packages.
+{% if preassemble_script_files -%}
+# If scripts required during build are present, copy them
+{% for src, dst in preassemble_script_files|dictsort %}
+COPY src/{{ src }} ${REPO_DIR}/{{ dst }}
+{% endfor -%}
+{% endif -%}
 
-# Run assemble scripts! These will actually build the specification
-# in the repository into the image.
+{% if preassemble_script_directives -%}
+USER root
+RUN chown -R ${NB_USER}:${NB_USER} ${REPO_DIR}
+{% endif -%}
+
+{% for sd in preassemble_script_directives -%}
+{{ sd }}
+{% endfor %}
+
+# Copy and chown stuff. This doubles the size of the repo, because
+# you can't actually copy as USER, only as root! Thanks, Docker!
+USER root
+COPY src/ ${REPO_DIR}
+RUN chown -R ${NB_USER}:${NB_USER} ${REPO_DIR}
+
+# Run assemble scripts! These will actually turn the specification
+# in the repository into an image.
 {% for sd in assemble_script_directives -%}
 {{ sd }}
 {% endfor %}
@@ -139,7 +158,7 @@ ENV {{item[0]}} {{item[1]}}
 # Container image Labels!
 # Put these at the end, since we don't want to rebuild everything
 # when these change! Did I mention I hate Dockerfile cache semantics?
-{% for k, v in labels.items() %}
+{% for k, v in labels|dictsort %}
 LABEL {{k}}="{{v}}"
 {%- endfor %}
 
@@ -376,6 +395,35 @@ class BuildPack:
 
         return []
 
+    def get_preassemble_script_files(self):
+        """
+        Dict of files to be copied to the container image for use in preassembly.
+
+        This is copied before the `build_scripts`, `preassemble_scripts` and
+        `assemble_scripts` are run, so can be executed from either of them.
+
+        It's a dictionary where the key is the source file path in the
+        repository and the value is the destination file path inside the
+        repository in the container.
+        """
+        return {}
+
+    def get_preassemble_scripts(self):
+        """
+        Ordered list of shell snippets to build an image for this repository.
+
+        A list of tuples, where the first item is a username & the
+        second is a single logical line of a bash script that should
+        be RUN as that user.
+
+        These are run before the source of the repository is copied into
+        the container image. These should be the scripts that depend on the
+        repository but do not need access to the contents.
+
+        For example the list of APT packages to install.
+        """
+        return []
+
     def get_assemble_scripts(self):
         """
         Ordered list of shell script snippets to build the repo into the image.
@@ -480,6 +528,16 @@ class BuildPack:
                 "RUN {}".format(textwrap.dedent(script.strip("\n")))
             )
 
+        preassemble_script_directives = []
+        last_user = "root"
+        for user, script in self.get_preassemble_scripts():
+            if last_user != user:
+                preassemble_script_directives.append("USER {}".format(user))
+                last_user = user
+            preassemble_script_directives.append(
+                "RUN {}".format(textwrap.dedent(script.strip("\n")))
+            )
+
         # Based on a physical location of a build script on the host,
         # create a mapping between:
         #   1. Location of a build script in a Docker build context
@@ -498,6 +556,8 @@ class BuildPack:
             env=self.get_env(),
             labels=self.get_labels(),
             build_script_directives=build_script_directives,
+            preassemble_script_files=self.get_preassemble_script_files(),
+            preassemble_script_directives=preassemble_script_directives,
             assemble_script_directives=assemble_script_directives,
             build_script_files=build_script_files,
             base_packages=sorted(self.get_base_packages()),
@@ -661,8 +721,8 @@ class BaseImage(BuildPack):
     def detect(self):
         return True
 
-    def get_assemble_scripts(self):
-        assemble_scripts = []
+    def get_preassemble_scripts(self):
+        scripts = []
         try:
             with open(self.binder_path("apt.txt")) as f:
                 extra_apt_packages = []
@@ -680,7 +740,7 @@ class BaseImage(BuildPack):
                         )
                     extra_apt_packages.append(package)
 
-            assemble_scripts.append(
+            scripts.append(
                 (
                     "root",
                     # This apt-get install is *not* quiet, since users explicitly asked for this
@@ -691,14 +751,16 @@ class BaseImage(BuildPack):
                 apt-get -qq clean && \
                 rm -rf /var/lib/apt/lists/*
                 """.format(
-                        " ".join(extra_apt_packages)
+                        " ".join(sorted(extra_apt_packages))
                     ),
                 )
             )
+
         except FileNotFoundError:
             pass
+
         if "py" in self.stencila_contexts:
-            assemble_scripts.extend(
+            scripts.extend(
                 [
                     (
                         "${NB_USER}",
@@ -710,7 +772,7 @@ class BaseImage(BuildPack):
                 ]
             )
         if self.stencila_manifest_dir:
-            assemble_scripts.extend(
+            scripts.extend(
                 [
                     (
                         "${NB_USER}",
@@ -723,7 +785,11 @@ class BaseImage(BuildPack):
                     )
                 ]
             )
-        return assemble_scripts
+        return scripts
+
+    def get_assemble_scripts(self):
+        """Return directives to run after the entire repository has been added to the image"""
+        return []
 
     def get_post_build_scripts(self):
         post_build = self.binder_path("postBuild")

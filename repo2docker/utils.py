@@ -391,3 +391,69 @@ def copytree(
     if errors:
         raise Error(errors)
     return dst
+
+
+def deep_get(dikt, path):
+    """Get a value located in `path` from a nested dictionary.
+
+    Use a string separated by periods as the path to access
+    values in a nested dictionary:
+
+    deep_get(data, "data.files.0") == data["data"]["files"][0]
+    """
+    value = dikt
+    for component in path.split("."):
+        if component.isdigit():
+            value = value[int(component)]
+        else:
+            value = value[component]
+    return value
+
+
+# doi_regexp, is_doi, and normalize_doi are from idutils (https://github.com/inveniosoftware/idutils)
+# Copyright (C) 2015-2018 CERN.
+# Copyright (C) 2018 Alan Rubin.
+# Licensed under BSD-3-Clause license
+doi_regexp = re.compile(
+    r"(doi:\s*|(?:https?://)?(?:dx\.)?doi\.org/)?(10\.\d+(.\d+)*/.+)$", flags=re.I
+)
+
+
+def is_doi(val):
+    """Returns None if val doesn't match pattern of a DOI.
+    http://en.wikipedia.org/wiki/Digital_object_identifier."""
+    return doi_regexp.match(val)
+
+
+def normalize_doi(val):
+    """Return just the DOI (e.g. 10.1234/jshd123)
+    from a val that could include a url or doi
+    (e.g. https://doi.org/10.1234/jshd123)"""
+    m = doi_regexp.match(val)
+    return m.group(2)
+
+
+def is_local_pip_requirement(line):
+    """Return whether a pip requirement (e.g. in requirements.txt file) references a local file"""
+    # trim comments and skip empty lines
+    line = line.split("#", 1)[0].strip()
+    if not line:
+        return False
+    if line.startswith(("-r", "-c")):
+        # local -r or -c references break isolation
+        return True
+    # strip off `-e, etc.`
+    if line.startswith("-"):
+        line = line.split(None, 1)[1]
+    if "file://" in line:
+        # file references break isolation
+        return True
+    if "://" in line:
+        # handle git://../local/file
+        path = line.split("://", 1)[1]
+    else:
+        path = line
+    if path.startswith("."):
+        # references a local file
+        return True
+    return False
