@@ -5,7 +5,7 @@ from collections import Mapping
 
 from ruamel.yaml import YAML
 
-from ..base import BaseImage
+from ..base import BaseImage, BuildPack
 from ...utils import is_local_pip_requirement
 
 # pattern for parsing conda dependency line
@@ -15,6 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 class CondaBuildPack(BaseImage):
+    _order = BaseImage._order + 1
     """A conda BuildPack.
 
     Uses miniconda since it is more lightweight than Anaconda.
@@ -28,7 +29,7 @@ class CondaBuildPack(BaseImage):
         the `NB_PYTHON_PREFIX` to the location of the jupyter binary.
 
         """
-        env = super().get_build_env() + [
+        env = [
             ("CONDA_DIR", "${APP_BASE}/conda"),
             ("NB_PYTHON_PREFIX", "${CONDA_DIR}/envs/notebook"),
         ]
@@ -40,15 +41,14 @@ class CondaBuildPack(BaseImage):
 
     def get_env(self):
         """Make kernel env the default for `conda install`"""
-        env = super().get_env() + [("CONDA_DEFAULT_ENV", "${KERNEL_PYTHON_PREFIX}")]
-        return env
+        return [("CONDA_DEFAULT_ENV", "${KERNEL_PYTHON_PREFIX}")]
 
     def get_path(self):
         """Return paths (including conda environment path) to be added to
         the PATH environment variable.
 
         """
-        path = super().get_path()
+        path = []
         path.insert(0, "${CONDA_DIR}/bin")
         if self.py2:
             path.insert(0, "${KERNEL_PYTHON_PREFIX}/bin")
@@ -73,7 +73,7 @@ class CondaBuildPack(BaseImage):
             - support for nteract
 
         """
-        return super().get_build_scripts() + [
+        return [
             (
                 "root",
                 r"""
@@ -125,7 +125,6 @@ class CondaBuildPack(BaseImage):
                 else:
                     self.log.warning("No frozen env: %s", py_frozen_name)
         files["conda/" + frozen_name] = "/tmp/environment.yml"
-        files.update(super().get_build_script_files())
         return files
 
     _environment_yaml = None
@@ -215,7 +214,7 @@ class CondaBuildPack(BaseImage):
         enables caching assembly result even when
         repo contents change
         """
-        assemble_files = super().get_preassemble_script_files()
+        assemble_files = {}
         if self._should_preassemble_env:
             environment_yml = self.binder_path("environment.yml")
             if os.path.exists(environment_yml):
@@ -244,18 +243,21 @@ class CondaBuildPack(BaseImage):
         return scripts
 
     def get_preassemble_scripts(self):
-        scripts = super().get_preassemble_scripts()
+        scripts = []
         if self._should_preassemble_env:
             scripts.extend(self.get_env_scripts())
         return scripts
 
     def get_assemble_scripts(self):
-        scripts = super().get_assemble_scripts()
+        scripts = []
         if not self._should_preassemble_env:
             scripts.extend(self.get_env_scripts())
         return scripts
 
+    def get_post_build_scripts(self):
+        return []
+
     def detect(self):
         """Check if current repo should be built with the Conda BuildPack.
         """
-        return os.path.exists(self.binder_path("environment.yml")) and super().detect()
+        return os.path.exists(self.binder_path("environment.yml"))

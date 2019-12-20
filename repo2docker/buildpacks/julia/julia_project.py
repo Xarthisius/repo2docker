@@ -6,6 +6,7 @@ from .semver import find_semver_match
 
 
 class JuliaProjectTomlBuildPack(PythonBuildPack):
+    _order = PythonBuildPack._order + 1
     """
     Julia build pack which uses conda.
     """
@@ -49,6 +50,9 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
 
         return default_julia_version
 
+    def get_packages(self):
+        return set()
+
     def get_build_env(self):
         """Get additional environment settings for Julia and Jupyter
 
@@ -67,7 +71,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
             For example, a tuple may be `('JULIA_VERSION', '0.6.0')`.
 
         """
-        return super().get_build_env() + [
+        return [
             ("JULIA_PATH", "${APP_BASE}/julia"),
             ("JULIA_DEPOT_PATH", "${JULIA_PATH}/pkg"),
             ("JULIA_VERSION", self.julia_version),
@@ -76,7 +80,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
         ]
 
     def get_env(self):
-        return super().get_env() + [("JULIA_PROJECT", "${REPO_DIR}")]
+        return [("JULIA_PROJECT", "${REPO_DIR}")]
 
     def get_path(self):
         """Adds path to Julia binaries to user's PATH.
@@ -86,7 +90,10 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
              executable is added to the list.
 
         """
-        return super().get_path() + ["${JULIA_PATH}/bin"]
+        return ["${JULIA_PATH}/bin"]
+
+    def get_build_script_files(self):
+        return {}
 
     def get_build_scripts(self):
         """
@@ -99,7 +106,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
         (from get_assemble_scripts).
 
         """
-        return super().get_build_scripts() + [
+        return [
             (
                 "root",
                 r"""
@@ -116,6 +123,12 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
             ),
         ]
 
+    def get_preassemble_script_files(self):
+        return {}
+
+    def get_preassemble_scripts(self):
+        return []
+
     def get_assemble_scripts(self):
         """
         Return series of build-steps specific to "this" Julia repository
@@ -130,7 +143,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
         The parent, CondaBuildPack, will add the build steps for
         any needed Python packages found in environment.yml.
         """
-        return super().get_assemble_scripts() + [
+        return [
             (
                 "${NB_USER}",
                 r"""

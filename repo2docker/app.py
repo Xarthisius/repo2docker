@@ -28,15 +28,9 @@ from traitlets.config import Application
 
 from . import __version__
 from .buildpacks import (
-    CondaBuildPack,
+    ComposableBuildPack,
     DockerBuildPack,
-    JuliaProjectTomlBuildPack,
-    JuliaRequireBuildPack,
     LegacyBinderDockerBuildPack,
-    NixBuildPack,
-    PipfileBuildPack,
-    PythonBuildPack,
-    RBuildPack,
 )
 from . import contentproviders
 from .utils import ByteSpecification, chdir
@@ -92,13 +86,7 @@ class Repo2Docker(Application):
         [
             LegacyBinderDockerBuildPack,
             DockerBuildPack,
-            JuliaProjectTomlBuildPack,
-            JuliaRequireBuildPack,
-            NixBuildPack,
-            RBuildPack,
-            CondaBuildPack,
-            PipfileBuildPack,
-            PythonBuildPack,
+            ComposableBuildPack,
         ],
         config=True,
         help="""
@@ -129,7 +117,7 @@ class Repo2Docker(Application):
     )
 
     default_buildpack = Any(
-        PythonBuildPack,
+        ComposableBuildPack,
         config=True,
         help="""
         The default build pack to use when no other buildpacks are found.

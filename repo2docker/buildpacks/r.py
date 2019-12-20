@@ -8,6 +8,7 @@ from .python import PythonBuildPack
 
 
 class RBuildPack(PythonBuildPack):
+    _order = PythonBuildPack._order + 1
     """
     Setup R for use with a repository
 
@@ -129,7 +130,7 @@ class RBuildPack(PythonBuildPack):
         description_R = "DESCRIPTION"
         if (
             not self.binder_dir and os.path.exists(description_R)
-        ) or "r" in self.stencila_contexts:
+        ) or "r" in self.stencila_contexts or os.path.exists(self.binder_path("install.R")):
             if not self.checkpoint_date:
                 # no R snapshot date set through runtime.txt
                 # set the R runtime to the latest date that is guaranteed to
@@ -140,14 +141,31 @@ class RBuildPack(PythonBuildPack):
                 self._runtime = "r-{}".format(str(self._checkpoint_date))
             return True
 
-    def get_path(self):
+    def get_packages(self):
         """
-        Return paths to be added to the PATH environment variable.
+        Return list of packages to be installed.
 
-        The RStudio package installs its binaries in a non-standard path,
-        so we explicitly add that path to PATH.
+        We install a base version of R, and packages required for RStudio to
+        be installed.
         """
-        return super().get_path() + ["/usr/lib/rstudio-server/bin/"]
+        packages = {
+            # For rstudio
+            "psmisc",
+            "libapparmor1",
+            "sudo",
+            "lsb-release",
+        }
+        # For R 3.4 we use the default Ubuntu package, for other versions we
+        # install from a different PPA
+        if V(self.r_version) < V("3.5"):
+            packages.add("r-base")
+            packages.add("r-base-dev")
+            packages.add("libclang-dev")
+
+        return packages
+
+    def get_base_packages(self):
+        return set()
 
     def get_build_env(self):
         """
@@ -157,33 +175,25 @@ class RBuildPack(PythonBuildPack):
         without needing root. This is set via the `R_LIBS_USER` environment
         variable, so we set that here.
         """
-        return super().get_build_env() + [
+        return [
             # This is the path where user libraries are installed
             ("R_LIBS_USER", "${APP_BASE}/rlibs")
         ]
 
-    def get_packages(self):
-        """
-        Return list of packages to be installed.
+    def get_env(self):
+        return []
 
-        We install a base version of R, and packages required for RStudio to
-        be installed.
+    def get_path(self):
         """
-        packages = [
-            # For rstudio
-            "psmisc",
-            "libapparmor1",
-            "sudo",
-            "lsb-release",
-        ]
-        # For R 3.4 we use the default Ubuntu package, for other versions we
-        # install from a different PPA
-        if V(self.r_version) < V("3.5"):
-            packages.append("r-base")
-            packages.append("r-base-dev")
-            packages.append("libclang-dev")
+        Return paths to be added to the PATH environment variable.
 
-        return super().get_packages().union(packages)
+        The RStudio package installs its binaries in a non-standard path,
+        so we explicitly add that path to PATH.
+        """
+        return ["/usr/lib/rstudio-server/bin/"]
+
+    def get_build_script_files(self):
+        return {}
 
     def get_build_scripts(self):
         """
@@ -385,10 +395,10 @@ class RBuildPack(PythonBuildPack):
                     )
                 ]
 
-        return super().get_build_scripts() + scripts
+        return scripts
 
     def get_preassemble_script_files(self):
-        files = super().get_preassemble_script_files()
+        files = {}
         installR_path = self.binder_path("install.R")
         if os.path.exists(installR_path):
             files[installR_path] = installR_path
@@ -416,11 +426,11 @@ class RBuildPack(PythonBuildPack):
                 )
             ]
 
-        return super().get_preassemble_scripts() + scripts
+        return scripts
 
     def get_assemble_scripts(self):
         """Install the dependencies of or the repository itself"""
-        assemble_scripts = super().get_assemble_scripts()
+        assemble_scripts = []
 
         installR_path = self.binder_path("install.R")
         if os.path.exists(installR_path):
@@ -441,3 +451,6 @@ class RBuildPack(PythonBuildPack):
             ]
 
         return assemble_scripts
+
+    def get_post_build_scripts(self):
+        return []

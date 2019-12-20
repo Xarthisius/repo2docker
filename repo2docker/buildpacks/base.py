@@ -250,12 +250,7 @@ class BuildPack:
 
         These would be installed with a --no-install-recommends option.
         """
-        return {
-            # Utils!
-            "less",
-            "nodejs",
-            "unzip",
-        }
+        return set()
 
     def get_build_env(self):
         """
@@ -673,6 +668,8 @@ class BuildPack:
 
 
 class BaseImage(BuildPack):
+    _order = 0
+
     def get_build_env(self):
         """Return env directives required for build"""
         return [
@@ -682,10 +679,10 @@ class BaseImage(BuildPack):
         ]
 
     def get_path(self):
-        return super().get_path() + ["${NPM_DIR}/bin"]
+        return ["${NPM_DIR}/bin"]
 
     def get_build_scripts(self):
-        scripts = [
+        return [
             (
                 "root",
                 r"""
@@ -700,8 +697,6 @@ class BaseImage(BuildPack):
                 """,
             ),
         ]
-
-        return super().get_build_scripts() + scripts
 
     def get_env(self):
         """Return env directives to be set after build"""
@@ -801,6 +796,14 @@ class BaseImage(BuildPack):
         if os.path.exists(post_build):
             return [post_build]
         return []
+
+    def get_base_packages(self):
+        return {
+            # Utils!
+            "less",
+            "nodejs",
+            "unzip",
+        }
 
     def get_start_script(self):
         start = self.binder_path("start")

@@ -1,11 +1,13 @@
 """Generates Dockerfiles based on an input matrix based on Python."""
 import os
 
+from ..base import BuildPack
 from ..conda import CondaBuildPack
 from ...utils import is_local_pip_requirement, open_guess_encoding
 
 
 class PythonBuildPack(CondaBuildPack):
+    _order = CondaBuildPack._order + 1
     """Setup Python for use with a repository."""
 
     @property
@@ -34,6 +36,27 @@ class PythonBuildPack(CondaBuildPack):
             py_version = ".".join(py_version_info[:2])
         self._python_version = py_version
         return self._python_version
+
+    def get_packages(self):
+        return set()
+
+    def get_base_packages(self):
+        return set()
+
+    def get_build_env(self):
+        return []
+
+    def get_env(self):
+        return []
+
+    def get_path(self):
+        return []
+
+    def get_build_script_files(self):
+        return {}
+
+    def get_build_scripts(self):
+        return []
 
     def _get_pip_scripts(self):
         """Get pip install scripts
@@ -96,7 +119,7 @@ class PythonBuildPack(CondaBuildPack):
         return True
 
     def get_preassemble_script_files(self):
-        assemble_files = super().get_preassemble_script_files()
+        assemble_files = {}
         for name in ("requirements.txt", "requirements3.txt"):
             requirements_txt = self.binder_path(name)
             if os.path.exists(requirements_txt):
@@ -105,7 +128,7 @@ class PythonBuildPack(CondaBuildPack):
 
     def get_preassemble_scripts(self):
         """Return scripts to run before adding the full repository"""
-        scripts = super().get_preassemble_scripts()
+        scripts = []
         if self._should_preassemble_pip:
             scripts.extend(self._get_pip_scripts())
         return scripts
@@ -116,7 +139,7 @@ class PythonBuildPack(CondaBuildPack):
         # requirements.txt will be installed in the *kernel* env
         # and requirements3.txt (if it exists)
         # will be installed in the python 3 notebook server env.
-        assemble_scripts = super().get_assemble_scripts()
+        assemble_scripts = []
         setup_py = "setup.py"
         # KERNEL_PYTHON_PREFIX is the env with the kernel,
         # whether it's distinct from the notebook or the same.
@@ -130,6 +153,9 @@ class PythonBuildPack(CondaBuildPack):
                 ("${NB_USER}", "{} install --no-cache-dir .".format(pip))
             )
         return assemble_scripts
+
+    def get_post_build_scripts(self):
+        return []
 
     def detect(self):
         """Check if current repo should be built with the Python buildpack.

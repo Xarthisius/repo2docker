@@ -1,4 +1,5 @@
 from .base import BuildPack, BaseImage
+from .composable import ComposableBuildPack
 from .python import PythonBuildPack
 from .pipfile import PipfileBuildPack
 from .conda import CondaBuildPack
