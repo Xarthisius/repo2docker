@@ -15,11 +15,19 @@ class ComposableBuildPack(BuildPack):
         self.buildpacks = []
 
     def detect(self):
-        for buildpack in [BaseImage(), CondaBuildPack(), PythonBuildPack(), RBuildPack(), JuliaProjectTomlBuildPack()]:
-            if buildpack.detect():
+        for buildpack in [BaseImage, CondaBuildPack, PythonBuildPack, RBuildPack, JuliaProjectTomlBuildPack]:
+            if buildpack().detect():
                 self.buildpacks.append(buildpack)
+                # For backward compatibility preserve inheritance
+                while buidpack.__bases__[0] is not BuildPack:
+                    buildpack = buidpack_class.__bases__[0]
+                    self.buildpacks.append(buildpack)
+        if self.buildpacks:
+            self.buildpacks = sorted(set(self.buildpacks), key=operator.attrgetter("_order"))
+            self.buildpacks = [_() for _ in self.buildpacks]  # initialize
+
         print("Using following buildpacks:")
-        for buildpack in self.buildpacks:
+        for buildpack_class in self.buildpacks:
             print(" -> {}".format(str(buildpack)))
         return True
 
