@@ -65,12 +65,10 @@ class RBuildPack(PythonBuildPack):
         if not hasattr(self, "_checkpoint_date"):
             match = re.match(r"r-(\d\d\d\d)-(\d\d)-(\d\d)", self.runtime)
             if not match:
-                # no R snapshot date set through runtime.txt
-                # set the R runtime to the latest date that is guaranteed to
-                # be on MRAN across timezones
-                self._checkpoint_date = datetime.date.today() - datetime.timedelta(
-                    days=2
-                )
+                # no R snapshot date set through runtime.txt so set
+                # to a reasonable default -- the last month of the previous
+                # quarter
+                self._checkpoint_date = self.mran_date(datetime.date.today())
             else:
                 self._checkpoint_date = datetime.date(*[int(s) for s in match.groups()])
 
@@ -94,12 +92,10 @@ class RBuildPack(PythonBuildPack):
             not self.binder_dir and os.path.exists(description_R)
         ) or "r" in self.stencila_contexts:
             if not self.checkpoint_date:
-                # no R snapshot date set through runtime.txt
-                # set the R runtime to the latest date that is guaranteed to
-                # be on MRAN across timezones
-                self._checkpoint_date = datetime.date.today() - datetime.timedelta(
-                    days=2
-                )
+                # no R snapshot date set through runtime.txt so set
+                # to a reasonable default -- the last month of the previous
+                # quarter
+                self._checkpoint_date = self.mran_date(datetime.date.today())
                 self._runtime = "r-{}".format(str(self._checkpoint_date))
             return True
 
@@ -350,3 +346,15 @@ class RBuildPack(PythonBuildPack):
             ]
 
         return assemble_scripts
+ 
+    def mran_date(self, date):
+        """
+           Returns a datetime representing the last month of the previous
+           quarter. This is intended to reduce the nubmer of image rebuilds.
+        """
+        # Get the last month of the previous quarter
+        qmon = (((((date.month - 1)//3)-1)%4)+1)*3
+        # Use last year if needed
+        year = date.year if date.month > 3 else date.year - 1
+        return datetime.date(year, qmon, 1)
+
