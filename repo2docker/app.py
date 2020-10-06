@@ -131,8 +131,8 @@ class Repo2Docker(Application):
     extra_build_args = Dict(
         {},
         help="""
-        Regular Docker build-time  arguments that will be passed as 
-        --build-arg key=value. 
+        Regular Docker build-time  arguments that will be passed as
+        --build-arg key=value.
         Reference https://docs.docker.com/engine/reference/commandline/build/
         """,
         config=True,
@@ -745,7 +745,7 @@ class Repo2Docker(Application):
                         extra=dict(phase="building"),
                     )
 
-                    build_args.update(extra_build_args)
+                    build_args.update(self.extra_build_args)
 
                     for l in picked_buildpack.build(
                         docker_client,

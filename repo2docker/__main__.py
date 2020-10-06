@@ -234,8 +234,8 @@ def get_argparser():
         dest="extra_build_args",
         action="append",
         help="Additional build arguments",
+        default=[],
     )
-
 
     return argparser
 

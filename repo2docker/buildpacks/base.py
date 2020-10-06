@@ -10,11 +10,12 @@ import sys
 import hashlib
 import escapism
 import xml.etree.ElementTree as ET
+from ..docker_utils import docker_build
 
 from traitlets import Dict
 
-# Only use syntax features supported by Docker 17.09
-TEMPLATE = r"""
+# Use new buildkit syntax features
+TEMPLATE = r"""# syntax=docker/dockerfile:experimental
 FROM buildpack-deps:bionic
 
 # Avoid prompts from apt
@@ -657,7 +658,7 @@ class BuildPack:
 
         build_kwargs.update(extra_build_kwargs)
 
-        for line in client.build(**build_kwargs):
+        for line in docker_build(**build_kwargs):
             yield line
 
 
