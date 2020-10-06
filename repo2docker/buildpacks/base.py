@@ -86,6 +86,13 @@ RUN apt-get -qq update && \
 
 EXPOSE 8888
 
+{% if build_args -%}
+# Arguments required for build
+{% for item in build_args -%}
+ARG {{item}}
+{% endfor -%}
+{% endif -%}
+
 {% if build_env -%}
 # Environment variables required for build
 {% for item in build_env -%}
@@ -508,6 +515,7 @@ class BuildPack:
             packages=sorted(self.get_packages()),
             path=self.get_path(),
             build_env=self.get_build_env(),
+            build_args=self.get_build_args(),
             env=self.get_env(),
             labels=self.get_labels(),
             build_script_directives=build_script_directives,

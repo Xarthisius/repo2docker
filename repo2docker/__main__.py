@@ -229,6 +229,14 @@ def get_argparser():
         # help=self.traits()['entrypoint_file'].help,
     )
 
+    argparser.add_argument(
+        "--build-arg",
+        dest="extra_build_args",
+        action="append",
+        help="Additional build arguments",
+    )
+
+
     return argparser
 
 
@@ -377,6 +385,11 @@ def make_r2d(argv=None):
         r2d.cache_from = args.cache_from
 
     r2d.environment = args.environment
+
+    r2d.extra_build_args = {}
+    for build_arg in args.extra_build_args:
+        kv = build_arg.split(":")
+        r2d.extra_build_args[kv[0]] = kv[1]
 
     # if the source exists locally we don't want to delete it at the end
     # FIXME: Find a better way to figure out if repo is 'local'. Push this into ContentProvider?
