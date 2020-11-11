@@ -388,7 +388,7 @@ def make_r2d(argv=None):
 
     r2d.extra_build_args = {}
     for build_arg in args.extra_build_args:
-        kv = build_arg.split(":")
+        kv = build_arg.split("=")
         r2d.extra_build_args[kv[0]] = kv[1]
 
     # if the source exists locally we don't want to delete it at the end
