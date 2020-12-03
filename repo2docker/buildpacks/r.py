@@ -375,15 +375,14 @@ class RBuildPack(PythonBuildPack):
             ]
 
         return assemble_scripts
- 
+
     def mran_date(self, date):
         """
-           Returns a datetime representing the last month of the previous
-           quarter. This is intended to reduce the nubmer of image rebuilds.
+        Returns a datetime representing the last month of the previous
+        quarter. This is intended to reduce the nubmer of image rebuilds.
         """
         # Get the last month of the previous quarter
-        qmon = (((((date.month - 1)//3)-1)%4)+1)*3
+        qmon = (((((date.month - 1) // 3) - 1) % 4) + 1) * 3
         # Use last year if needed
         year = date.year if date.month > 3 else date.year - 1
         return datetime.date(year, qmon, 1)
-
