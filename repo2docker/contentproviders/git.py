@@ -21,15 +21,23 @@ class Git(ContentProvider):
 
         # make a, possibly shallow, clone of the remote repository
         try:
-            cmd = ["git", "clone", "--recursive"]
+            cmd = ["git", "clone"]
             if ref is None:
+                # check out of HEAD is performed after the clone is complete
                 cmd.extend(["--depth", "1"])
+            else:
+                # don't check out HEAD, the given ref will be checked out later
+                # this prevents HEAD's submodules to be cloned if ref doesn't have them
+                cmd.extend(["--no-checkout"])
             cmd.extend([repo, output_dir])
             for line in execute_cmd(cmd, capture=yield_output):
                 yield line
 
         except subprocess.CalledProcessError as e:
-            msg = "Failed to clone repository from {repo}.".format(repo=repo)
+            msg = "Failed to clone repository from {repo}".format(repo=repo)
+            if ref is not None:
+                msg += " (ref {ref})".format(ref=ref)
+            msg += "."
             raise ContentProviderException(msg) from e
 
         # check out the specific ref given by the user
@@ -39,8 +47,19 @@ class Git(ContentProvider):
                 self.log.error(
                     "Failed to check out ref %s", ref, extra=dict(phase="failed")
                 )
-                raise ValueError("Failed to check out ref {}".format(ref))
-            # If the hash is resolved above, we should be able to reset to it
+                if ref == "master":
+                    msg = (
+                        "Failed to check out the 'master' branch. "
+                        "Maybe the default branch is not named 'master' "
+                        "for this repository.\n\nTry not explicitly "
+                        "specifying `--ref`."
+                    )
+                else:
+                    msg = "Failed to check out ref {}".format(ref)
+                raise ValueError(msg)
+            # We don't need to explicitly checkout things as the reset will
+            # take care of that. If the hash is resolved above, we should be
+            # able to reset to it
             for line in execute_cmd(
                 ["git", "reset", "--hard", hash], cwd=output_dir, capture=yield_output
             ):

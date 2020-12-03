@@ -1,5 +1,8 @@
 """Generates a Dockerfile based on an input matrix with REQUIRE for legacy Julia"""
+
+from distutils.version import LooseVersion as V
 import os
+
 from ..python import PythonBuildPack
 
 
@@ -10,6 +13,16 @@ class JuliaRequireBuildPack(PythonBuildPack):
 
     minor_julias = {"0.6": "0.6.4", "0.7": "0.7.0", "1.0": "1.0.4", "1.1": "1.1.1"}
     major_julias = {"1": "1.1.1"}
+
+    @property
+    def python_version(self):
+        # IJulia doesn't build on julia 0.6
+        # due to old incompatibilities with Jupyter-core >= 4.5,
+        # so use the similarly-old Python 3.5 base environment
+        if V(self.julia_version) < V("0.7"):
+            return "3.5"
+        else:
+            return super().python_version
 
     @property
     def julia_version(self):
@@ -75,9 +88,9 @@ class JuliaRequireBuildPack(PythonBuildPack):
     def get_path(self):
         """Adds path to Julia binaries to user's PATH.
 
-         Returns:
-             an ordered list of path strings. The path to the Julia
-             executable is added to the list.
+        Returns:
+            an ordered list of path strings. The path to the Julia
+            executable is added to the list.
 
         """
         return super().get_path() + ["${JULIA_HOME}"]

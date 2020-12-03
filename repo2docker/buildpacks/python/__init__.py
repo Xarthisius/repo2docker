@@ -2,7 +2,7 @@
 import os
 
 from ..conda import CondaBuildPack
-from ...utils import is_local_pip_requirement
+from ...utils import is_local_pip_requirement, open_guess_encoding
 
 
 class PythonBuildPack(CondaBuildPack):
@@ -86,7 +86,7 @@ class PythonBuildPack(CondaBuildPack):
             requirements_txt = self.binder_path(name)
             if not os.path.exists(requirements_txt):
                 continue
-            with open(requirements_txt) as f:
+            with open_guess_encoding(requirements_txt) as f:
                 for line in f:
                     if is_local_pip_requirement(line):
                         return False
@@ -132,8 +132,7 @@ class PythonBuildPack(CondaBuildPack):
         return assemble_scripts
 
     def detect(self):
-        """Check if current repo should be built with the Python buildpack.
-        """
+        """Check if current repo should be built with the Python buildpack."""
         requirements_txt = self.binder_path("requirements.txt")
         runtime_txt = self.binder_path("runtime.txt")
         setup_py = "setup.py"

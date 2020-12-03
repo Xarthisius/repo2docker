@@ -1,15 +1,17 @@
 """BuildPack for conda environments"""
 import os
 import re
-from collections import Mapping
+from collections.abc import Mapping
 
 from ruamel.yaml import YAML
 
 from ..base import BaseImage
+from .._r_base import rstudio_base_scripts, IRKERNEL_VERSION
 from ...utils import is_local_pip_requirement
 
 # pattern for parsing conda dependency line
 PYTHON_REGEX = re.compile(r"python\s*=+\s*([\d\.]*)")
+R_REGEX = re.compile(r"r-base\s*=+\s*([\d\.]*)")
 # current directory
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -61,7 +63,7 @@ class CondaBuildPack(BaseImage):
 
         All scripts here should be independent of contents of the repository.
 
-        This sets up through `install-miniconda.bash` (found in this directory):
+        This sets up through `install-miniforge.bash` (found in this directory):
 
         - a directory for the conda environment and its ownership by the
           notebook user
@@ -77,8 +79,9 @@ class CondaBuildPack(BaseImage):
             (
                 "root",
                 r"""
-                bash /tmp/install-miniconda.bash && \
-                rm /tmp/install-miniconda.bash /tmp/environment.yml
+                TIMEFORMAT='time: %3R' \
+                bash -c 'time /tmp/install-miniforge.bash' && \
+                rm /tmp/install-miniforge.bash /tmp/environment.yml
                 """,
             )
         ]
@@ -101,7 +104,7 @@ class CondaBuildPack(BaseImage):
 
         """
         files = {
-            "conda/install-miniconda.bash": "/tmp/install-miniconda.bash",
+            "conda/install-miniforge.bash": "/tmp/install-miniforge.bash",
             "conda/activate-conda.sh": "/etc/profile.d/activate-conda.sh",
         }
         py_version = self.python_version
@@ -179,6 +182,7 @@ class CondaBuildPack(BaseImage):
         Will return 'x.y' if version is found (e.g '3.6'),
         or a Falsy empty string '' if not found.
 
+        Version information below the minor level is dropped.
         """
         if not hasattr(self, "_python_version"):
             py_version = None
@@ -205,6 +209,46 @@ class CondaBuildPack(BaseImage):
         return self._python_version
 
     @property
+    def r_version(self):
+        """Detect the Python version for a given `environment.yml`
+
+        Will return 'x.y' if version is found (e.g '3.6'),
+        or a Falsy empty string '' if not found.
+
+        """
+        if not hasattr(self, "_r_version"):
+            self._r_version = ""
+            env = self.environment_yaml
+            for dep in env.get("dependencies", []):
+                if not isinstance(dep, str):
+                    continue
+                match = R_REGEX.match(dep)
+                if not match:
+                    continue
+                self._r_version = match.group(1)
+                break
+
+        return self._r_version
+
+    @property
+    def uses_r(self):
+        """Detect whether the user also installs R packages.
+
+        Will return True when a package prefixed with 'r-' is being installed.
+        """
+        if not hasattr(self, "_uses_r"):
+            deps = self.environment_yaml.get("dependencies", [])
+            self._uses_r = False
+            for dep in deps:
+                if not isinstance(dep, str):
+                    continue
+                if dep.startswith("r-"):
+                    self._uses_r = True
+                    break
+
+        return self._uses_r
+
+    @property
     def py2(self):
         """Am I building a Python 2 kernel environment?"""
         return self.python_version and self.python_version.split(".")[0] == "2"
@@ -223,8 +267,7 @@ class CondaBuildPack(BaseImage):
         return assemble_files
 
     def get_env_scripts(self):
-        """Return series of build-steps specific to this source repository.
-        """
+        """Return series of build-steps specific to this source repository."""
         scripts = []
         environment_yml = self.binder_path("environment.yml")
         env_prefix = "${KERNEL_PYTHON_PREFIX}" if self.py2 else "${NB_PYTHON_PREFIX}"
@@ -233,14 +276,57 @@ class CondaBuildPack(BaseImage):
                 (
                     "${NB_USER}",
                     r"""
-                conda env update -p {0} -f "{1}" && \
-                conda clean --all -f -y && \
-                conda list -p {0}
+                TIMEFORMAT='time: %3R' \
+                bash -c 'time mamba env update -p {0} -f "{1}" && \
+                time mamba clean --all -f -y && \
+                mamba list -p {0} \
+                '
                 """.format(
                         env_prefix, environment_yml
                     ),
                 )
             )
+
+        if self.uses_r:
+            if self.r_version:
+                r_pin = "=" + self.r_version
+            else:
+                r_pin = ""
+            scripts.append(
+                (
+                    "${NB_USER}",
+                    r"""
+                mamba install -p {0} r-base{1} r-irkernel={2} r-devtools -y && \
+                mamba clean --all -f -y && \
+                mamba list -p {0}
+                """.format(
+                        env_prefix, r_pin, IRKERNEL_VERSION
+                    ),
+                )
+            )
+            scripts += rstudio_base_scripts()
+            scripts += [
+                (
+                    "root",
+                    r"""
+                    echo auth-none=1 >> /etc/rstudio/rserver.conf && \
+                    echo auth-minimum-user-id=0 >> /etc/rstudio/rserver.conf && \
+                    echo "rsession-which-r={0}/bin/R" >> /etc/rstudio/rserver.conf && \
+                    echo www-frame-origin=same >> /etc/rstudio/rserver.conf
+                    """.format(
+                        env_prefix
+                    ),
+                ),
+                (
+                    "${NB_USER}",
+                    # Install a pinned version of IRKernel and set it up for use!
+                    r"""
+                 R --quiet -e "IRkernel::installspec(prefix='{0}')"
+                 """.format(
+                        env_prefix
+                    ),
+                ),
+            ]
         return scripts
 
     def get_preassemble_scripts(self):
@@ -256,6 +342,5 @@ class CondaBuildPack(BaseImage):
         return scripts
 
     def detect(self):
-        """Check if current repo should be built with the Conda BuildPack.
-        """
+        """Check if current repo should be built with the Conda BuildPack."""
         return os.path.exists(self.binder_path("environment.yml")) and super().detect()

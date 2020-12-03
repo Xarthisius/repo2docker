@@ -31,12 +31,33 @@ def validate_image_name(image_name):
     """
     if not is_valid_docker_image_name(image_name):
         msg = (
-            "%r is not a valid docker image name. Image name"
-            "must start with an alphanumeric character and"
-            "can then use _ . or - in addition to alphanumeric." % image_name
+            "%r is not a valid docker image name. Image name "
+            "must start with a lowercase or numeric character and "
+            "can then use _ . or - in addition to lowercase and numeric." % image_name
         )
         raise argparse.ArgumentTypeError(msg)
     return image_name
+
+
+# See https://github.com/jupyterhub/repo2docker/issues/871 for reason
+class MimicDockerEnvHandling(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        # There are 3 cases:
+        #  key=value    pass as is
+        #  key=         pass as is
+        #  key          pass using current value, or don't pass
+        if "=" not in values:
+            try:
+                value_to_append = "{}={}".format(values, os.environ[values])
+            except KeyError:
+                # no local def, so don't pass
+                return
+        else:
+            value_to_append = values
+
+        # destination variable is initially defined as an empty list, so
+        # no special casing of first time is needed.
+        getattr(namespace, self.dest).append(value_to_append)
 
 
 def get_argparser():
@@ -75,7 +96,8 @@ def get_argparser():
     argparser.add_argument(
         "--ref",
         help=(
-            "If building a git url, which reference to check out. " "E.g., `master`."
+            "Reference to build instead of default reference. For example"
+            " branch name or commit for a Git repository."
         ),
     )
 
@@ -158,11 +180,14 @@ def get_argparser():
         "--user-name", help="Username of the primary user in the image"
     )
 
+    # Process the environment options the same way that docker does, as
+    # they are passed directly to docker as the environment to use. This
+    # requires a custom action for argparse.
     argparser.add_argument(
         "--env",
         "-e",
         dest="environment",
-        action="append",
+        action=MimicDockerEnvHandling,
         help="Environment variables to define at container run time",
         default=[],
     )
@@ -177,17 +202,9 @@ def get_argparser():
 
     argparser.add_argument("--target-repo-dir", help=Repo2Docker.target_repo_dir.help)
 
-    argparser.add_argument(
-        "--appendix",
-        type=str,
-        # help=self.traits()['appendix'].help,
-    )
+    argparser.add_argument("--appendix", type=str, help=Repo2Docker.appendix.help)
 
-    argparser.add_argument(
-        "--subdir",
-        type=str,
-        # help=self.traits()['subdir'].help,
-    )
+    argparser.add_argument("--subdir", type=str, help=Repo2Docker.subdir.help)
 
     argparser.add_argument(
         "--version",
@@ -196,7 +213,9 @@ def get_argparser():
         help="Print the repo2docker version and exit.",
     )
 
-    argparser.add_argument("--cache-from", action="append", default=[])
+    argparser.add_argument(
+        "--cache-from", action="append", default=[], help=Repo2Docker.cache_from.help
+    )
 
     argparser.add_argument(
         "--template",

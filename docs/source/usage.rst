@@ -12,8 +12,11 @@ Using ``repo2docker``
 
 ``repo2docker`` can build a reproducible computational environment for any repository that
 follows :ref:`specification`. repo2docker is called with the URL of a Git repository,
-a Zenodo DOI or a path to a local directory. It then
-performs these steps:
+a `DOI  <https://en.wikipedia.org/wiki/Digital_object_identifier>`_ from Zenodo or Figshare,
+a `Handle <https://en.wikipedia.org/wiki/Handle_System>`_ or DOI from a Dataverse installation,
+or a path to a local directory.
+
+It then performs these steps:
 
 1. Inspects the repository for :ref:`configuration files <config-files>`. These will be used to build
    the environment needed to run the repository.
@@ -76,6 +79,8 @@ specify the ``branch-name`` or ``commit-hash``. For example::
    commit-hash will result in the latest commit of the repository being built.
 
 
+.. _usage-config-file-location:
+
 Where to put configuration files
 ================================
 
@@ -85,8 +90,8 @@ Where to put configuration files
 * A folder named ``.binder/`` in the root of the repository.
 * The root directory of the repository.
 
-`repo2docker` searches for these folders in order (``binder/``, ``.binder/``,
-root). Only configuration files in the first identified folder are considered.
+Having both ``binder/`` and ``.binder/`` folders is not allowed.
+If one of these folders exists, only configuration files in that folder are considered, configuration in the root directory will be ignored.
 
 Check the complete list of :ref:`configuration files <config-files>` supported
 by ``repo2docker`` to see how to configure the build process.
