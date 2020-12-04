@@ -67,7 +67,7 @@ def docker_build(
 
         while True:
             line = p.stdout.readline()
-            if not line:
+            if p.poll() is not None:
                 break
             yield {"stream": line}
 
