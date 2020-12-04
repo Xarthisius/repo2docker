@@ -321,6 +321,12 @@ class BuildPack:
         """
         return {}
 
+    def get_build_args(self):
+        """
+        List of build arguments set on image, used with --build-args.
+        """
+        return []
+
     def _check_stencila(self):
         """Find the stencila manifest dir if it exists
 
