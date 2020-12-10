@@ -19,7 +19,7 @@ def docker_build(
     rm=False,
     container_limits=None,
     cache_from=None,
-    **extra_build_kwargs
+    **extra_build_kwargs,
 ):
 
     build_cmd = "docker build --progress plain"
