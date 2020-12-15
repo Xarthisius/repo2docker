@@ -579,7 +579,8 @@ class Repo2Docker(Application):
                 version="auto", **docker.utils.kwargs_from_env()
             )
             image = api_client.inspect_image(self.output_image_spec)
-            image_workdir = image["ContainerConfig"]["WorkingDir"]
+            # Buildkit uses Config/WorkingDir not ContainerConfig/WorkingDir
+            image_workdir = image["Config"]["WorkingDir"]
 
             for k, v in self.volumes.items():
                 container_volumes[os.path.abspath(k)] = {
