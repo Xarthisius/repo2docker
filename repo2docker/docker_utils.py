@@ -30,6 +30,7 @@ class DockerCLI:
         container_limits=None,
         cache_from=None,
         path=None,
+        dockerfile=None,
         **extra_build_kwargs,
     ):
 
@@ -38,11 +39,18 @@ class DockerCLI:
         if tag is not None:
             build_cmd = build_cmd + " --tag " + tag
 
+        if path is not None:
+            os.chdir(path)
+
+        if dockerfile is not None:
+            build_cmd = build_cmd + " -f " + dockerfile
+
         tempdir = tempfile.mkdtemp()
         if fileobj is not None:
             tar = tarfile.open(fileobj=fileobj, mode="r")
             tar.extractall(tempdir)
             tar.close()
+            path = tempdir
 
         if buildargs is not None:
             for key, value in buildargs.items():
@@ -65,9 +73,8 @@ class DockerCLI:
             for cache in cache_from:
                 build_cmd = build_cmd + " " + cache
 
-        build_cmd = build_cmd + " " + tempdir
+        build_cmd = build_cmd + " " + path
 
-        print(build_cmd)
         with subprocess.Popen(
             build_cmd,
             shell=True,
