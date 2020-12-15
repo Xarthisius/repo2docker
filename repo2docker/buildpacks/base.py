@@ -10,7 +10,6 @@ import sys
 import hashlib
 import escapism
 import xml.etree.ElementTree as ET
-from ..docker_utils import docker_build
 
 from traitlets import Dict
 
@@ -664,7 +663,7 @@ class BuildPack:
 
         build_kwargs.update(extra_build_kwargs)
 
-        for line in docker_build(**build_kwargs):
+        for line in client.build(**build_kwargs):
             yield line
 
 

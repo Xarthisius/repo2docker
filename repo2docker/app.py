@@ -40,6 +40,7 @@ from .buildpacks import (
 )
 from . import contentproviders
 from .utils import ByteSpecification, chdir
+from .docker_utils import DockerCLI
 
 
 class Repo2Docker(Application):
@@ -659,7 +660,7 @@ class Repo2Docker(Application):
         # Check if r2d can connect to docker daemon
         if not self.dry_run:
             try:
-                docker_client = docker.APIClient(version="auto", **kwargs_from_env())
+                docker_client = DockerCLI()
             except DockerException as e:
                 self.log.error(
                     "\nDocker client initialization error: %s.\nCheck if docker is running on the host.\n",
