@@ -9,6 +9,7 @@ import escapism
 from repo2docker.app import Repo2Docker
 from repo2docker.__main__ import make_r2d
 from repo2docker.utils import chdir
+from repo2docker.docker_utils import DockerCLI
 
 
 def test_find_image():
@@ -84,7 +85,7 @@ def test_build_kwargs(repo_with_content):
     app = make_r2d(argv)
     app.extra_build_kwargs = {"somekey": "somevalue"}
 
-    with patch.object(docker.APIClient, "build") as builds:
+    with patch.object(DockerCLI, "build") as builds:
         builds.return_value = []
         app.build()
     builds.assert_called_once()
@@ -121,7 +122,7 @@ def test_root_not_allowed():
 
         app = Repo2Docker(repo=src, user_id=1000, user_name="jovyan", run=False)
         app.initialize()
-        with patch.object(docker.APIClient, "build") as builds:
+        with patch.object(DockerCLI, "build") as builds:
             builds.return_value = []
             app.build()
         builds.assert_called_once()
@@ -129,7 +130,7 @@ def test_root_not_allowed():
 
 def test_dryrun_works_without_docker(tmpdir, capsys):
     with chdir(tmpdir):
-        with patch.object(docker, "APIClient") as client:
+        with patch.object(DockerCLI, "__init__") as client:
             client.side_effect = docker.errors.DockerException("Error: no Docker")
             app = Repo2Docker(dry_run=True)
             app.build()
@@ -139,7 +140,7 @@ def test_dryrun_works_without_docker(tmpdir, capsys):
 
 def test_error_log_without_docker(tmpdir, capsys):
     with chdir(tmpdir):
-        with patch.object(docker, "APIClient") as client:
+        with patch.object(DockerCLI, "__init__") as client:
             client.side_effect = docker.errors.DockerException("Error: no Docker")
             app = Repo2Docker()
 
