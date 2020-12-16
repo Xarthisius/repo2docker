@@ -131,7 +131,8 @@ class RBuildPack(PythonBuildPack):
                 # no R snapshot date set through runtime.txt so set
                 # to a reasonable default -- the last month of the previous
                 # quarter
-                self._checkpoint_date = self.mran_date(datetime.date.today())
+                quarter = self.mran_date(datetime.date.today())
+                self._checkpoint_date = self._get_latest_working_mran_date(quarter, 3)
                 self._runtime = "r-{}".format(str(self._checkpoint_date))
             return True
 
