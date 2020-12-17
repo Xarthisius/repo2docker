@@ -11,6 +11,7 @@ import docker
 import pytest
 
 from repo2docker.buildpacks import BaseImage, DockerBuildPack
+from repo2docker.docker_utils import DockerCLI
 
 
 basedir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,7 +20,7 @@ basedir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def test_memory_limit_enforced(tmpdir):
     fake_cache_from = ["image-1:latest"]
     fake_log_value = {"stream": "fake"}
-    fake_client = MagicMock(spec=docker.APIClient)
+    fake_client = MagicMock(spec=DockerCLI)
     fake_client.build.return_value = iter([fake_log_value])
     fake_extra_build_kwargs = {"somekey": "somevalue"}
 
@@ -73,7 +74,7 @@ def test_memlimit_same_postbuild():
 def test_memlimit_argument_type(BuildPack):
     # check that an exception is raised when the memory limit isn't an int
     fake_log_value = {"stream": "fake"}
-    fake_client = MagicMock(spec=docker.APIClient)
+    fake_client = MagicMock(spec=DockerCLI)
     fake_client.build.return_value = iter([fake_log_value])
 
     with pytest.raises(ValueError) as exc_info:

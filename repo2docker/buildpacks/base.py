@@ -13,8 +13,8 @@ import xml.etree.ElementTree as ET
 
 from traitlets import Dict
 
-# Only use syntax features supported by Docker 17.09
-TEMPLATE = r"""
+# Use new buildkit syntax features
+TEMPLATE = r"""# syntax=docker/dockerfile:experimental
 FROM buildpack-deps:bionic
 
 # Avoid prompts from apt
@@ -85,6 +85,13 @@ RUN apt-get -qq update && \
 {% endif -%}
 
 EXPOSE 8888
+
+{% if build_args -%}
+# Arguments required for build
+{% for item in build_args -%}
+ARG {{item}}
+{% endfor -%}
+{% endif -%}
 
 {% if build_env -%}
 # Environment variables required for build
@@ -313,6 +320,12 @@ class BuildPack:
         """
         return {}
 
+    def get_build_args(self):
+        """
+        List of build arguments set on image, used with --build-args.
+        """
+        return []
+
     def _check_stencila(self):
         """Find the stencila manifest dir if it exists
 
@@ -508,6 +521,7 @@ class BuildPack:
             packages=sorted(self.get_packages()),
             path=self.get_path(),
             build_env=self.get_build_env(),
+            build_args=self.get_build_args(),
             env=self.get_env(),
             labels=self.get_labels(),
             build_script_directives=build_script_directives,

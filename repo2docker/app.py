@@ -40,6 +40,7 @@ from .buildpacks import (
 )
 from . import contentproviders
 from .utils import ByteSpecification, chdir
+from .docker_utils import DockerCLI
 
 
 class Repo2Docker(Application):
@@ -124,6 +125,16 @@ class Repo2Docker(Application):
         Dictionary that allows the user to set the desired runtime flag
         to configure the amount of access to CPU resources your container has.
         Reference https://docs.docker.com/config/containers/resource_constraints/#cpu
+        """,
+        config=True,
+    )
+
+    extra_build_args = Dict(
+        {},
+        help="""
+        Regular Docker build-time  arguments that will be passed as
+        --build-arg key=value.
+        Reference https://docs.docker.com/engine/reference/commandline/build/
         """,
         config=True,
     )
@@ -569,7 +580,8 @@ class Repo2Docker(Application):
                 version="auto", **docker.utils.kwargs_from_env()
             )
             image = api_client.inspect_image(self.output_image_spec)
-            image_workdir = image["ContainerConfig"]["WorkingDir"]
+            # Buildkit uses Config/WorkingDir not ContainerConfig/WorkingDir
+            image_workdir = image["Config"]["WorkingDir"]
 
             for k, v in self.volumes.items():
                 container_volumes[os.path.abspath(k)] = {
@@ -648,7 +660,7 @@ class Repo2Docker(Application):
         # Check if r2d can connect to docker daemon
         if not self.dry_run:
             try:
-                docker_client = docker.APIClient(version="auto", **kwargs_from_env())
+                docker_client = DockerCLI()
             except DockerException as e:
                 self.log.error(
                     "\nDocker client initialization error: %s.\nCheck if docker is running on the host.\n",
@@ -734,6 +746,8 @@ class Repo2Docker(Application):
                         bp.__class__.__name__,
                         extra=dict(phase="building"),
                     )
+
+                    build_args.update(self.extra_build_args)
 
                     for l in picked_buildpack.build(
                         docker_client,

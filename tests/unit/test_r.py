@@ -64,7 +64,7 @@ def test_mran_date(tmpdir, runtime, expected):
     assert r.checkpoint_date == date(*expected)
 
 
-@pytest.mark.parametrize("expected", ["2019-12-29", "2019-12-26"])
+@pytest.mark.parametrize("expected", ["2019-09-01", "2019-08-29"])
 def test_mran_latestdate(tmpdir, expected):
     def mock_request_head(url):
         r = Response()
@@ -83,6 +83,7 @@ def test_mran_latestdate(tmpdir, expected):
     with patch("requests.head", side_effect=mock_request_head):
         with patch("datetime.date") as mockdate:
             mockdate.today.return_value = date(2019, 12, 31)
+            mockdate.side_effect = lambda *args, **kw: date(*args, **kw)
             r = buildpacks.RBuildPack()
             r.detect()
     assert r.checkpoint_date.isoformat() == expected

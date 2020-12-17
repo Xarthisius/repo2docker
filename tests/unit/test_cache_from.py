@@ -5,6 +5,7 @@ Test that --cache-from is passed in to docker API properly.
 from unittest.mock import MagicMock
 
 import docker
+from repo2docker.docker_utils import DockerCLI
 
 from repo2docker.buildpacks import (
     BaseImage,
@@ -16,7 +17,7 @@ from repo2docker.buildpacks import (
 def test_cache_from_base(tmpdir):
     cache_from = ["image-1:latest"]
     fake_log_value = {"stream": "fake"}
-    fake_client = MagicMock(spec=docker.APIClient)
+    fake_client = MagicMock(spec=DockerCLI)
     fake_client.build.return_value = iter([fake_log_value])
     extra_build_kwargs = {"somekey": "somevalue"}
 
@@ -34,7 +35,7 @@ def test_cache_from_base(tmpdir):
 def test_cache_from_docker(tmpdir):
     cache_from = ["image-1:latest"]
     fake_log_value = {"stream": "fake"}
-    fake_client = MagicMock(spec=docker.APIClient)
+    fake_client = MagicMock(spec=DockerCLI)
     fake_client.build.return_value = iter([fake_log_value])
     extra_build_kwargs = {"somekey": "somevalue"}
     tmpdir.chdir()
