@@ -135,11 +135,20 @@ class RBuildPack(PythonBuildPack):
             if not self.checkpoint_date:
                 # no R snapshot date set through runtime.txt
                 # Set it to two days ago from today
-                self._checkpoint_date = datetime.date.today() - datetime.timedelta(
-                    days=2
-                )
+                self._checkpoint_date = self.mran_date(datetime.date.today())
                 self._runtime = "r-{}".format(str(self._checkpoint_date))
             return True
+
+    def mran_date(self, date):
+        """
+        Returns a datetime representing the last month of the previous
+        quarter. This is intended to reduce the nubmer of image rebuilds.
+        """
+        # Get the last month of the previous quarter
+        qmon = (((((date.month - 1) // 3) - 1) % 4) + 1) * 3
+        # Use last year if needed
+        year = date.year if date.month > 3 else date.year - 1
+        return datetime.date(year, qmon, 1)
 
     def get_path(self):
         """
