@@ -11,7 +11,7 @@ import hashlib
 import escapism
 
 # Only use syntax features supported by Docker 17.09
-TEMPLATE = r"""
+TEMPLATE = r"""# syntax=docker/dockerfile:experimental
 FROM buildpack-deps:bionic
 
 # Avoid prompts from apt
@@ -77,6 +77,13 @@ RUN apt-get -qq update && \
 {% endif -%}
 
 EXPOSE 8888
+
+{% if build_args -%}
+# Arguments required for build
+{% for item in build_args -%}
+ARG {{item}}
+{% endfor -%}
+{% endif -%}
 
 {% if build_env -%}
 # Environment variables required for build
@@ -192,6 +199,7 @@ CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
 """
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ENTRYPOINT_FILE = os.path.join(HERE, "repo2docker-entrypoint")
 
 # Also used for the group
 DEFAULT_NB_UID = 1000
@@ -217,6 +225,8 @@ class BuildPack:
     def __init__(self):
         self.log = logging.getLogger("repo2docker")
         self.appendix = ""
+        self.entrypoint_file = ENTRYPOINT_FILE
+        self.template = TEMPLATE
         self.labels = {}
         if sys.platform.startswith("win"):
             self.log.warning(
@@ -304,6 +314,10 @@ class BuildPack:
         system, and the value is the destination file path inside the
         container image.
         """
+        return {}
+
+    def get_build_args(self):
+        """Dict of build arguments with default values, used with --build-args."""
         return {}
 
     def _check_stencila(self):
@@ -451,7 +465,7 @@ class BuildPack:
         """
         build_args = build_args or {}
 
-        t = jinja2.Template(TEMPLATE)
+        t = jinja2.Template(self.template)
 
         build_script_directives = []
         last_user = "root"
@@ -501,6 +515,7 @@ class BuildPack:
             packages=sorted(self.get_packages()),
             path=self.get_path(),
             build_env=self.get_build_env(),
+            build_args=list(self.get_build_args().keys()),
             env=self.get_env(),
             labels=self.get_labels(),
             build_script_directives=build_script_directives,

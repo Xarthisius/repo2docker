@@ -415,6 +415,22 @@ class Repo2Docker(Application):
         """,
     )
 
+    template = Unicode(
+        "",
+        help="""
+        Jinja template used to render the Dockerfile.
+        """,
+        config=True,
+    )
+
+    entrypoint_file = Unicode(
+        "",
+        help="""
+        Path to a file that will be used as an entry point in the Docker image.
+        """,
+        config=True,
+    )
+
     def get_engine(self):
         """Return an instance of the container engine.
 
@@ -765,6 +781,10 @@ class Repo2Docker(Application):
                     picked_buildpack = self.default_buildpack()
 
                 picked_buildpack.appendix = self.appendix
+                if self.template:
+                    picked_buildpack.template = self.template
+                if self.entrypoint_file:
+                    picked_buildpack.entrypoint_file = self.entrypoint_file
                 # Add metadata labels
                 picked_buildpack.labels["repo2docker.version"] = self.version
                 repo_label = "local" if os.path.isdir(self.repo) else self.repo
