@@ -9,11 +9,8 @@ import string
 import sys
 import hashlib
 import escapism
-import xml.etree.ElementTree as ET
 
-from traitlets import Dict
-
-# Use new buildkit syntax features
+# Only use syntax features supported by Docker 17.09
 TEMPLATE = r"""# syntax=docker/dockerfile:experimental
 FROM buildpack-deps:bionic
 
@@ -54,11 +51,6 @@ RUN groupadd \
         --shell /bin/bash \
         --uid ${NB_UID} \
         ${NB_USER}
-
-RUN wget --quiet -O - https://deb.nodesource.com/gpgkey/nodesource.gpg.key |  apt-key add - && \
-    DISTRO="bionic" && \
-    echo "deb https://deb.nodesource.com/node_14.x $DISTRO main" >> /etc/apt/sources.list.d/nodesource.list && \
-    echo "deb-src https://deb.nodesource.com/node_14.x $DISTRO main" >> /etc/apt/sources.list.d/nodesource.list
 
 # Base package installs are not super interesting to users, so hide their outputs
 # If install fails for some reason, errors will still be printed
@@ -115,6 +107,8 @@ COPY --chown={{ user }}:{{ user }} {{ src }} {{ dst }}
 {% for sd in build_script_directives -%}
 {{ sd }}
 {% endfor %}
+# ensure root user after build scripts
+USER root
 
 # Allow target path repo is cloned to be configurable
 ARG REPO_DIR=${HOME}
@@ -153,6 +147,8 @@ COPY --chown={{ user }}:{{ user }} src/{{ src }} ${REPO_DIR}/{{ dst }}
 {% for sd in preassemble_script_directives -%}
 {{ sd }}
 {% endfor %}
+# ensure root user after preassemble scripts
+USER root
 
 # Copy stuff.
 COPY --chown={{ user }}:{{ user }} src/ ${REPO_DIR}
@@ -188,6 +184,8 @@ ENV R2D_ENTRYPOINT "{{ start_script }}"
 {% endif -%}
 
 # Add entrypoint
+ENV PYTHONUNBUFFERED=1
+COPY /python3-login /usr/local/bin/python3-login
 COPY /repo2docker-entrypoint /usr/local/bin/repo2docker-entrypoint
 ENTRYPOINT ["/usr/local/bin/repo2docker-entrypoint"]
 
@@ -200,9 +198,8 @@ CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
 {% endif %}
 """
 
-ENTRYPOINT_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "repo2docker-entrypoint"
-)
+HERE = os.path.dirname(os.path.abspath(__file__))
+ENTRYPOINT_FILE = os.path.join(HERE, "repo2docker-entrypoint")
 
 # Also used for the group
 DEFAULT_NB_UID = 1000
@@ -259,7 +256,6 @@ class BuildPack:
         return {
             # Utils!
             "less",
-            "nodejs",
             "unzip",
         }
 
@@ -321,10 +317,8 @@ class BuildPack:
         return {}
 
     def get_build_args(self):
-        """
-        List of build arguments set on image, used with --build-args.
-        """
-        return []
+        """Dict of build arguments with default values, used with --build-args."""
+        return {}
 
     def _check_stencila(self):
         """Find the stencila manifest dir if it exists
@@ -521,7 +515,7 @@ class BuildPack:
             packages=sorted(self.get_packages()),
             path=self.get_path(),
             build_env=self.get_build_env(),
-            build_args=self.get_build_args(),
+            build_args=list(self.get_build_args().keys()),
             env=self.get_env(),
             labels=self.get_labels(),
             build_script_directives=build_script_directives,
@@ -535,35 +529,6 @@ class BuildPack:
             appendix=self.appendix,
             # For docker 17.09 `COPY --chown`, 19.03 would allow using $NBUSER
             user=build_args.get("NB_UID", DEFAULT_NB_UID),
-        )
-
-    @staticmethod
-    def generate_build_context_filename(src_path, hash_length=6):
-        """
-        Generate a filename for a file injected into the Docker build context.
-
-        In case the src_path is relative, it's assumed it's relative to directory of
-        this __file__. Returns the resulting filename and an absolute path to the source
-        file on host.
-        """
-        if not os.path.isabs(src_path):
-            src_parts = src_path.split("/")
-            src_path = os.path.join(os.path.dirname(__file__), *src_parts)
-
-        src_path_hash = hashlib.sha256(src_path.encode("utf-8")).hexdigest()
-        safe_chars = set(string.ascii_letters + string.digits)
-
-        def escape(s):
-            return escapism.escape(s, safe=safe_chars, escape_char="-")
-
-        src_path_slug = escape(src_path)
-        filename = "build_script_files/{name}-{hash}"
-        return (
-            filename.format(
-                name=src_path_slug[: 255 - hash_length - 20],
-                hash=src_path_hash[:hash_length],
-            ).lower(),
-            src_path,
         )
 
     @staticmethod
@@ -627,7 +592,8 @@ class BuildPack:
             dest_path, src_path = self.generate_build_context_filename(src)
             tar.add(src_path, dest_path, filter=_filter_tar)
 
-        tar.add(self.entrypoint_file, "repo2docker-entrypoint", filter=_filter_tar)
+        for fname in ("repo2docker-entrypoint", "python3-login"):
+            tar.add(os.path.join(HERE, fname), fname, filter=_filter_tar)
 
         tar.add(".", "src/", filter=_filter_tar)
 
@@ -654,9 +620,6 @@ class BuildPack:
             tag=image_spec,
             custom_context=True,
             buildargs=build_args,
-            decode=True,
-            forcerm=True,
-            rm=True,
             container_limits=limits,
             cache_from=cache_from,
         )
@@ -672,31 +635,7 @@ class BaseImage(BuildPack):
         """Return env directives required for build"""
         return [
             ("APP_BASE", "/srv"),
-            ("NPM_DIR", "${APP_BASE}/npm"),
-            ("NPM_CONFIG_GLOBALCONFIG", "${NPM_DIR}/npmrc"),
         ]
-
-    def get_path(self):
-        return super().get_path() + ["${NPM_DIR}/bin"]
-
-    def get_build_scripts(self):
-        scripts = [
-            (
-                "root",
-                r"""
-                mkdir -p ${NPM_DIR} && \
-                chown -R ${NB_USER}:${NB_USER} ${NPM_DIR}
-                """,
-            ),
-            (
-                "${NB_USER}",
-                r"""
-                npm config --global set prefix ${NPM_DIR}
-                """,
-            ),
-        ]
-
-        return super().get_build_scripts() + scripts
 
     def get_env(self):
         """Return env directives to be set after build"""

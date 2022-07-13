@@ -2,8 +2,8 @@ import argparse
 import sys
 import os
 import logging
-import docker
 from .app import Repo2Docker
+from .engine import BuildError, ImageLoadError
 from . import __version__
 from .utils import validate_and_generate_port_mapping, is_valid_docker_image_name
 
@@ -64,6 +64,20 @@ def get_argparser():
     """Get arguments that may be used by repo2docker"""
     argparser = argparse.ArgumentParser(
         description="Fetch a repository and build a container image"
+    )
+
+    argparser.add_argument(
+        "--help-all",
+        dest="help_all",
+        action="store_true",
+        help="Display all configurable options and exit.",
+    )
+
+    argparser.add_argument(
+        "--version",
+        dest="version",
+        action="store_true",
+        help="Print the repo2docker version and exit.",
     )
 
     argparser.add_argument(
@@ -204,18 +218,29 @@ def get_argparser():
 
     argparser.add_argument("--appendix", type=str, help=Repo2Docker.appendix.help)
 
-    argparser.add_argument("--subdir", type=str, help=Repo2Docker.subdir.help)
+    argparser.add_argument(
+        "--label",
+        dest="labels",
+        action="append",
+        help="Extra label to set on the image, in form name=value",
+        default=[],
+    )
 
     argparser.add_argument(
-        "--version",
-        dest="version",
-        action="store_true",
-        help="Print the repo2docker version and exit.",
+        "--build-arg",
+        dest="build_args",
+        action="append",
+        help="Extra build arg to pass to the build process, in form name=value",
+        default=[],
     )
+
+    argparser.add_argument("--subdir", type=str, help=Repo2Docker.subdir.help)
 
     argparser.add_argument(
         "--cache-from", action="append", default=[], help=Repo2Docker.cache_from.help
     )
+
+    argparser.add_argument("--engine", help="Name of the container engine")
 
     argparser.add_argument(
         "--template",
@@ -226,15 +251,7 @@ def get_argparser():
     argparser.add_argument(
         "--entrypoint-file",
         type=str,
-        # help=self.traits()['entrypoint_file'].help,
-    )
-
-    argparser.add_argument(
-        "--build-arg",
-        dest="extra_build_args",
-        action="append",
-        help="Additional build arguments",
-        default=[],
+        help="Entrypoint file copied to the image.",
     )
 
     return argparser
@@ -247,15 +264,24 @@ def make_r2d(argv=None):
     if argv is None:
         argv = sys.argv[1:]
 
+    argparser = get_argparser()
+
     # version must be checked before parse, as repo/cmd are required and
     # will spit out an error if allowed to be parsed first.
     if "--version" in argv:
         print(__version__)
         sys.exit(0)
 
-    args = get_argparser().parse_args(argv)
+    if "--help-all" in argv:
+        argparser.print_help()
+        print("\nAll configurable options:\n")
+        Repo2Docker().print_help(classes=True)
+        sys.exit(0)
+
+    args, traitlet_args = argparser.parse_known_args(argv)
 
     r2d = Repo2Docker()
+    r2d.parse_command_line(traitlet_args)
 
     if args.debug:
         r2d.log_level = logging.DEBUG
@@ -263,6 +289,14 @@ def make_r2d(argv=None):
     r2d.load_config_file(args.config)
     if args.appendix:
         r2d.appendix = args.appendix
+
+    for l in args.labels:
+        key, _, val = l.partition("=")
+        r2d.labels[key] = val
+
+    for a in args.build_args:
+        key, _, val = a.partition("=")
+        r2d.extra_build_args[key] = val
 
     if args.entrypoint_file:
         r2d.entrypoint_file = args.entrypoint_file
@@ -384,12 +418,10 @@ def make_r2d(argv=None):
     if args.cache_from:
         r2d.cache_from = args.cache_from
 
-    r2d.environment = args.environment
+    if args.engine:
+        r2d.engine = args.engine
 
-    r2d.extra_build_args = {}
-    for build_arg in args.extra_build_args:
-        kv = build_arg.split("=", 1)
-        r2d.extra_build_args[kv[0]] = kv[1]
+    r2d.environment = args.environment
 
     # if the source exists locally we don't want to delete it at the end
     # FIXME: Find a better way to figure out if repo is 'local'. Push this into ContentProvider?
@@ -409,12 +441,12 @@ def main():
     r2d.initialize()
     try:
         r2d.start()
-    except docker.errors.BuildError as e:
+    except BuildError as e:
         # This is only raised by us
         if r2d.log_level == logging.DEBUG:
             r2d.log.exception(e)
         sys.exit(1)
-    except docker.errors.ImageLoadError as e:
+    except ImageLoadError as e:
         # This is only raised by us
         if r2d.log_level == logging.DEBUG:
             r2d.log.exception(e)

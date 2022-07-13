@@ -15,7 +15,7 @@ from repo2docker.docker_utils import DockerCLI
 def test_find_image():
     images = [{"RepoTags": ["some-org/some-repo:latest"]}]
 
-    with patch("repo2docker.app.docker.APIClient") as FakeDockerClient:
+    with patch("repo2docker.docker.docker.APIClient") as FakeDockerClient:
         instance = FakeDockerClient.return_value
         instance.images.return_value = images
 
@@ -29,7 +29,7 @@ def test_find_image():
 def test_dont_find_image():
     images = [{"RepoTags": ["some-org/some-image-name:latest"]}]
 
-    with patch("repo2docker.app.docker.APIClient") as FakeDockerClient:
+    with patch("repo2docker.docker.docker.APIClient") as FakeDockerClient:
         instance = FakeDockerClient.return_value
         instance.images.return_value = images
 
