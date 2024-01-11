@@ -2,9 +2,12 @@
 Interface for a repo2docker container engine
 """
 
+import json
+import os
 from abc import ABC, abstractmethod
-from traitlets.config import LoggingConfigurable
 
+from traitlets import Dict, default
+from traitlets.config import LoggingConfigurable
 
 # Based on https://docker-py.readthedocs.io/en/4.2.0/containers.html
 
@@ -131,7 +134,7 @@ class Image:
         return self._config
 
     def __repr__(self):
-        return "Image(tags={},config={})".format(self.tags, self.config)
+        return f"Image(tags={self.tags},config={self.config})"
 
 
 class ContainerEngine(LoggingConfigurable):
@@ -141,6 +144,37 @@ class ContainerEngine(LoggingConfigurable):
     Inherits from LoggingConfigurable, which means it has a log property.
     Initialised with a reference to the parent so can also be configured using traitlets.
     """
+
+    registry_credentials = Dict(
+        help="""
+        Credentials dictionary, if set will be used to authenticate with
+        the registry. Typically this will include the keys:
+
+            - `username`: The registry username
+            - `password`: The registry password or token
+            - `registry`: The registry URL
+
+        This can also be set by passing a JSON object in the
+        CONTAINER_ENGINE_REGISTRY_CREDENTIALS environment variable.
+        """,
+        config=True,
+    )
+
+    @default("registry_credentials")
+    def _registry_credentials_default(self):
+        """
+        Set the registry credentials from CONTAINER_ENGINE_REGISTRY_CREDENTIALS
+        """
+        obj = os.getenv("CONTAINER_ENGINE_REGISTRY_CREDENTIALS")
+        if obj:
+            try:
+                return json.loads(obj)
+            except json.JSONDecodeError:
+                self.log.error(
+                    "CONTAINER_ENGINE_REGISTRY_CREDENTIALS is not valid JSON"
+                )
+                raise
+        return {}
 
     string_output = True
     """
@@ -177,6 +211,7 @@ class ContainerEngine(LoggingConfigurable):
         fileobj=None,
         path="",
         labels=None,
+        platform=None,
         **kwargs,
     ):
         """
@@ -207,6 +242,8 @@ class ContainerEngine(LoggingConfigurable):
             path to the Dockerfile
         labels : dict
             Dictionary of labels to set on the image
+        platform: str
+            Platform to build for
 
         Returns
         -------
@@ -247,6 +284,9 @@ class ContainerEngine(LoggingConfigurable):
     def push(self, image_spec):
         """
         Push image to a registry
+
+        If the registry_credentials traitlets is set it should be used to
+        authenticate with the registry before pushing.
 
         Parameters
         ----------

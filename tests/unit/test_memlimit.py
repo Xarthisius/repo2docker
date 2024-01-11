@@ -3,21 +3,18 @@ Test that build time memory limits are enforced
 """
 
 import os
-
 from unittest.mock import MagicMock
-
-import docker
 
 import pytest
 
+import docker
 from repo2docker.buildpacks import BaseImage, DockerBuildPack
 from repo2docker.docker_utils import DockerCLI
-
 
 basedir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def test_memory_limit_enforced(tmpdir):
+def test_memory_limit_enforced(tmpdir, base_image):
     fake_cache_from = ["image-1:latest"]
     fake_log_value = {"stream": "fake"}
     fake_client = MagicMock(spec=DockerCLI)
@@ -31,7 +28,7 @@ def test_memory_limit_enforced(tmpdir):
     # Test that the buildpack passes the right arguments to the docker
     # client in order to enforce the memory limit
     tmpdir.chdir()
-    for line in BaseImage().build(
+    for line in BaseImage(base_image).build(
         fake_client,
         "image-2",
         memory_limit,
@@ -51,34 +48,17 @@ def test_memory_limit_enforced(tmpdir):
     }
 
 
-def test_memlimit_same_postbuild():
-    """
-    Validate that the postBuild files for the dockerfile and non-dockerfile
-    tests are the same
-
-    Until https://github.com/jupyterhub/repo2docker/issues/160 gets fixed.
-    """
-    filepaths = [
-        os.path.join(basedir, "memlimit", t, "postBuild")
-        for t in ("dockerfile", "non-dockerfile")
-    ]
-    file_contents = []
-    for fp in filepaths:
-        with open(fp) as f:
-            file_contents.append(f.read())
-    # Make sure they're all the same
-    assert len(set(file_contents)) == 1
-
-
 @pytest.mark.parametrize("BuildPack", [BaseImage, DockerBuildPack])
-def test_memlimit_argument_type(BuildPack):
+def test_memlimit_argument_type(BuildPack, base_image):
     # check that an exception is raised when the memory limit isn't an int
     fake_log_value = {"stream": "fake"}
     fake_client = MagicMock(spec=DockerCLI)
     fake_client.build.return_value = iter([fake_log_value])
 
     with pytest.raises(ValueError) as exc_info:
-        for line in BuildPack().build(fake_client, "image-2", "10Gi", {}, [], {}):
+        for line in BuildPack(base_image).build(
+            fake_client, "image-2", "10Gi", {}, [], {}
+        ):
             pass
 
         assert "The memory limit has to be specified as an" in str(exc_info.value)

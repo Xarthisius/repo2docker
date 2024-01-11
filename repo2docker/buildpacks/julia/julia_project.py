@@ -1,13 +1,14 @@
 """Generates a Dockerfile based on an input matrix for Julia"""
 import functools
 import os
+from functools import lru_cache
 
 import requests
 import semver
 import toml
 
-from ..python import PythonBuildPack
 from ...semver import find_semver_match
+from ..python import PythonBuildPack
 
 
 class JuliaProjectTomlBuildPack(PythonBuildPack):
@@ -19,14 +20,14 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
     # Note that these must remain ordered, in order for the find_semver_match()
     # function to behave correctly.
     @property
-    @functools.lru_cache(maxsize=1)
+    @lru_cache(maxsize=1)
     def all_julias(self):
         try:
             json = requests.get(
                 "https://julialang-s3.julialang.org/bin/versions.json"
             ).json()
         except Exception as e:
-            raise RuntimeError("Failed to fetch available Julia versions: {e}")
+            raise RuntimeError(f"Failed to fetch available Julia versions: {e}")
         vers = [semver.VersionInfo.parse(v) for v in json.keys()]
         # filter out pre-release versions not supported by find_semver_match()
         filtered_vers = [v for v in vers if v.prerelease is None]
@@ -67,6 +68,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
             raise RuntimeError("Failed to find a matching Julia version: {compat}")
         return match
 
+    @lru_cache()
     def get_build_env(self):
         """Get additional environment settings for Julia and Jupyter
 
@@ -79,23 +81,41 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
                 will be installed
             - `JULIA_DEPOT_PATH`: path where Julia libraries are installed.
             - `JULIA_VERSION`: default version of julia to be installed
+            - `JULIA_ARCH`: machine architecture used in Julia download URLs
+            - `JULIA_ARCH_SHORT`: machine architecture used in Julia download URLs
             - `JUPYTER`: environment variable required by IJulia to point to
                 the `jupyter` executable
 
             For example, a tuple may be `('JULIA_VERSION', '0.6.0')`.
 
         """
+        if self.platform == "linux/arm64":
+            julia_arch = julia_arch_short = "aarch64"
+        else:
+            julia_arch = "x86_64"
+            julia_arch_short = "x64"
         return super().get_build_env() + [
             ("JULIA_PATH", "${APP_BASE}/julia"),
             ("JULIA_DEPOT_PATH", "${JULIA_PATH}/pkg"),
             ("JULIA_VERSION", self.julia_version),
+            ("JULIA_ARCH", julia_arch),
+            ("JULIA_ARCH_SHORT", julia_arch_short),
             ("JUPYTER", "${NB_PYTHON_PREFIX}/bin/jupyter"),
             ("JUPYTER_DATA_DIR", "${NB_PYTHON_PREFIX}/share/jupyter"),
         ]
 
-    def get_env(self):
-        return super().get_env() + [("JULIA_PROJECT", "${REPO_DIR}")]
+    @property
+    def project_dir(self):
+        if self.binder_dir:
+            return "${REPO_DIR}/" + self.binder_dir
+        else:
+            return "${REPO_DIR}"
 
+    @lru_cache()
+    def get_env(self):
+        return super().get_env() + [("JULIA_PROJECT", self.project_dir)]
+
+    @lru_cache()
     def get_path(self):
         """Adds path to Julia binaries to user's PATH.
 
@@ -106,6 +126,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
         """
         return super().get_path() + ["${JULIA_PATH}/bin"]
 
+    @lru_cache()
     def get_build_scripts(self):
         """
         Return series of build-steps common to "ALL" Julia repositories
@@ -122,7 +143,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
                 "root",
                 r"""
                 mkdir -p ${JULIA_PATH} && \
-                curl -sSL "https://julialang-s3.julialang.org/bin/linux/x64/${JULIA_VERSION%[.-]*}/julia-${JULIA_VERSION}-linux-x86_64.tar.gz" | tar -xz -C ${JULIA_PATH} --strip-components 1
+                curl -sSL "https://julialang-s3.julialang.org/bin/linux/${JULIA_ARCH_SHORT}/${JULIA_VERSION%[.-]*}/julia-${JULIA_VERSION}-linux-${JULIA_ARCH}.tar.gz" | tar -xz -C ${JULIA_PATH} --strip-components 1
                 """,
             ),
             (
@@ -134,6 +155,7 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
             ),
         ]
 
+    @lru_cache()
     def get_assemble_scripts(self):
         """
         Return series of build-steps specific to "this" Julia repository
@@ -148,15 +170,19 @@ class JuliaProjectTomlBuildPack(PythonBuildPack):
         The parent, CondaBuildPack, will add the build steps for
         any needed Python packages found in environment.yml.
         """
-        return super().get_assemble_scripts() + [
+        scripts = super().get_assemble_scripts()
+        scripts.append(
             (
                 "${NB_USER}",
                 r"""
-                JULIA_PROJECT="" julia -e "using Pkg; Pkg.add(\"IJulia\"); using IJulia; installkernel(\"Julia\", \"--project=${REPO_DIR}\");" && \
-                julia --project=${REPO_DIR} -e 'using Pkg; Pkg.instantiate(); Pkg.resolve(); pkg"precompile"'
-                """,
+            JULIA_PROJECT="" julia -e "using Pkg; Pkg.add(\"IJulia\"); using IJulia; installkernel(\"Julia\", \"--project={project}\");" && \
+            julia --project={project} -e 'using Pkg; Pkg.instantiate(); Pkg.resolve(); pkg"precompile"'
+            """.format(
+                    project=self.project_dir
+                ),
             )
-        ]
+        )
+        return scripts
 
     def detect(self):
         """

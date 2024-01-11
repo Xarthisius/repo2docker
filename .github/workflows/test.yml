@@ -11,6 +11,7 @@ on:
       - "**.rst"
       - ".github/workflows/*"
       - "!.github/workflows/test.yml"
+      - ".pre-commit-config.yaml"
   push:
     paths-ignore:
       - "docs/**"
@@ -18,6 +19,7 @@ on:
       - "**.rst"
       - ".github/workflows/*"
       - "!.github/workflows/test.yml"
+      - ".pre-commit-config.yaml"
     branches-ignore:
       - "dependabot/**"
       - "pre-commit-ci-update-config"
@@ -39,38 +41,7 @@ env:
   GIT_AUTHOR_NAME: CI User
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-22.04
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python_version: ["3.9"]
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "${{ matrix.python_version }}"
-
-      # There will almost never be a cache hit on the cache key when this job is
-      # run, as it is the first of all jobs in this workflow. The subsequent
-      # jobs in this workflow can rely on this cache though.
-      - name: Save pip's install cache on job completion
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: "${{ github.run_id }}-${{ matrix.python_version }}"
-
-      - name: Install dependencies
-        run: |
-          pip install -r dev-requirements.txt
-          pip freeze
-
-      - run: pre-commit run --all-files
-
   test:
-    needs: pre-commit
     runs-on: ubuntu-${{ matrix.ubuntu_version }}
 
     strategy:
@@ -103,12 +74,6 @@ jobs:
         with:
           python-version: "${{ matrix.python_version }}"
 
-      - name: Restore pip's install cache from previous job
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: "${{ github.run_id }}-${{ matrix.python_version }}"
-
       - name: Install dependencies
         run: |
           pip install -r dev-requirements.txt
@@ -116,7 +81,7 @@ jobs:
 
       - name: Install repo2docker
         run: |
-          python setup.py bdist_wheel
+          python -m build --wheel .
           pip install dist/*.whl
 
           # add for mercurial tests
@@ -128,6 +93,4 @@ jobs:
         run: |
           pytest --verbose --color=yes --durations=10 --cov=repo2docker tests/${{ matrix.repo_type }}
 
-      - name: Submit codecov report
-        run: |
-          codecov
+      - uses: codecov/codecov-action@v3

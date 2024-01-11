@@ -1,24 +1,29 @@
 """BuildPack for nixpkgs environments"""
 import os
+from functools import lru_cache
 
-from ..base import BuildPack, BaseImage
+from ..base import BaseImage
 
 
 class NixBuildPack(BaseImage):
     """A nix Package Manager BuildPack"""
 
+    @lru_cache()
     def get_path(self):
         """Return paths to be added to PATH environemnt variable"""
         return super().get_path() + ["/home/${NB_USER}/.nix-profile/bin"]
 
+    @lru_cache()
     def get_env(self):
         """Ordered list of environment variables to be set for this image"""
+
         return super().get_env() + [
             ("NIX_PATH", "nixpkgs=/home/${NB_USER}/.nix-defexpr/channels/nixpkgs"),
             ("NIX_SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt"),
             ("GIT_SSL_CAINFO", "/etc/ssl/certs/ca-certificates.crt"),
         ]
 
+    @lru_cache()
     def get_build_scripts(self):
         """
         Return series of build-steps common to all nix repositories.
@@ -30,6 +35,10 @@ class NixBuildPack(BaseImage):
          - install nix package manager for user
 
         """
+        if self.platform == "linux/arm64":
+            nix_arch = "aarch64"
+        else:
+            nix_arch = "x86_64"
         return super().get_build_scripts() + [
             (
                 "root",
@@ -43,13 +52,14 @@ class NixBuildPack(BaseImage):
             ),
             (
                 "${NB_USER}",
-                """
-            bash /home/${NB_USER}/.local/bin/install-nix.bash && \
-            rm /home/${NB_USER}/.local/bin/install-nix.bash
+                f"""
+            NIX_ARCH={nix_arch} bash /home/${{NB_USER}}/.local/bin/install-nix.bash && \
+            rm /home/${{NB_USER}}/.local/bin/install-nix.bash
             """,
             ),
         ]
 
+    @lru_cache()
     def get_build_script_files(self):
         """Dict of files to be copied to the container image for use in building"""
         return {
@@ -57,21 +67,21 @@ class NixBuildPack(BaseImage):
             "nix/nix-shell-wrapper": "/usr/local/bin/nix-shell-wrapper",
         }
 
+    @lru_cache()
     def get_assemble_scripts(self):
         """Return series of build-steps specific to this source repository."""
         return super().get_assemble_scripts() + [
             (
                 "${NB_USER}",
-                """
+                f"""
             nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs && \
             nix-channel --update && \
-            nix-shell {}
-            """.format(
-                    self.binder_path("default.nix")
-                ),
+            nix-shell {self.binder_path("default.nix")}
+            """,
             )
         ]
 
+    @lru_cache()
     def get_start_script(self):
         """The path to a script to be executed as ENTRYPOINT"""
         # the shell wrapper script duplicates the behaviour of other buildpacks

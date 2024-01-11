@@ -1,8 +1,7 @@
-codecov
+build
 conda-lock
 pre-commit
 pytest-cov
 pytest>=4.6
 pyyaml
 requests_mock
-wheel

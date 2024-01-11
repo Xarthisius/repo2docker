@@ -1,8 +1,9 @@
 """Generates Dockerfiles based on an input matrix based on Python."""
 import os
+from functools import lru_cache
 
-from ..conda import CondaBuildPack
 from ...utils import is_local_pip_requirement, open_guess_encoding
+from ..conda import CondaBuildPack
 
 
 class PythonBuildPack(CondaBuildPack):
@@ -23,6 +24,9 @@ class PythonBuildPack(CondaBuildPack):
             # not a Python runtime (e.g. R, which subclasses this)
             # use the default Python
             self._python_version = self.major_pythons["3"]
+            self.log.warning(
+                f"Python version unspecified, using current default Python version {self._python_version}. This will change in the future."
+            )
             return self._python_version
 
         py_version_info = runtime.split("-", 1)[1].split(".")
@@ -45,8 +49,8 @@ class PythonBuildPack(CondaBuildPack):
         # whether it's distinct from the notebook or the same.
         pip = "${KERNEL_PYTHON_PREFIX}/bin/pip"
         scripts = []
-        if self.py2:
-            # using python 2 kernel,
+        if self.separate_kernel_env:
+            # using legacy Python kernel
             # requirements3.txt allows installation in the notebook server env
             nb_requirements_file = self.binder_path("requirements3.txt")
             if os.path.exists(nb_requirements_file):
@@ -55,9 +59,7 @@ class PythonBuildPack(CondaBuildPack):
                         "${NB_USER}",
                         # want the $NB_PYHTON_PREFIX environment variable, not for
                         # Python's string formatting to try and replace this
-                        '${{NB_PYTHON_PREFIX}}/bin/pip install --no-cache-dir -r "{}"'.format(
-                            nb_requirements_file
-                        ),
+                        f'${{NB_PYTHON_PREFIX}}/bin/pip install --no-cache-dir -r "{nb_requirements_file}"',
                     )
                 )
 
@@ -67,7 +69,7 @@ class PythonBuildPack(CondaBuildPack):
             scripts.append(
                 (
                     "${NB_USER}",
-                    '{} install --no-cache-dir -r "{}"'.format(pip, requirements_file),
+                    f'{pip} install --no-cache-dir -r "{requirements_file}"',
                 )
             )
         return scripts
@@ -95,6 +97,7 @@ class PythonBuildPack(CondaBuildPack):
         # allow assembly from subset
         return True
 
+    @lru_cache()
     def get_preassemble_script_files(self):
         assemble_files = super().get_preassemble_script_files()
         for name in ("requirements.txt", "requirements3.txt"):
@@ -103,6 +106,7 @@ class PythonBuildPack(CondaBuildPack):
                 assemble_files[requirements_txt] = requirements_txt
         return assemble_files
 
+    @lru_cache()
     def get_preassemble_scripts(self):
         """Return scripts to run before adding the full repository"""
         scripts = super().get_preassemble_scripts()
@@ -110,6 +114,7 @@ class PythonBuildPack(CondaBuildPack):
             scripts.extend(self._get_pip_scripts())
         return scripts
 
+    @lru_cache()
     def get_assemble_scripts(self):
         """Return series of build steps that require the full repository"""
         # If we have a runtime.txt & that's set to python-2.7,
@@ -126,9 +131,7 @@ class PythonBuildPack(CondaBuildPack):
 
         # setup.py exists *and* binder dir is not used
         if not self.binder_dir and os.path.exists(setup_py):
-            assemble_scripts.append(
-                ("${NB_USER}", "{} install --no-cache-dir .".format(pip))
-            )
+            assemble_scripts.append(("${NB_USER}", f"{pip} install --no-cache-dir ."))
         return assemble_scripts
 
     def detect(self):

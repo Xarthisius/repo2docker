@@ -5,7 +5,6 @@ import docker
 import tarfile
 import tempfile
 import shutil
-import json
 import subprocess
 import os
 

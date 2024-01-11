@@ -1,18 +1,19 @@
 """
 Test if labels are supplied correctly to the container
 """
-from repo2docker.app import Repo2Docker
-from repo2docker.buildpacks import BuildPack
-from repo2docker import __version__
-import pytest
 from unittest.mock import Mock
 
+import pytest
+
+from repo2docker import __version__
+from repo2docker.app import Repo2Docker
+from repo2docker.buildpacks import BuildPack
 
 URL = "https://github.com/binderhub-ci-repos/repo2docker-ci-clone-depth"
 
 
-def test_buildpack_labels_rendered():
-    bp = BuildPack()
+def test_buildpack_labels_rendered(base_image):
+    bp = BuildPack(base_image)
     assert "LABEL" not in bp.render()
     bp.labels["first_label"] = "firstlabel"
     assert 'LABEL first_label="firstlabel"\n' in bp.render()
