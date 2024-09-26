@@ -1,9 +1,9 @@
 # AUTO GENERATED FROM environment.yml, DO NOT MANUALLY MODIFY
-# Generated on 2024-08-29 07:01:59 UTC
+# Generated on 2024-08-29 07:03:48 UTC
 channels:
 - conda-forge
 dependencies:
-- python=3.8.*
+- python=3.12.*
 - nodejs=20
 - pip
 - ipywidgets==8.*     # https://github.com/jupyter-widgets/ipywidgets

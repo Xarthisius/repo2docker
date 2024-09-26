@@ -7,6 +7,7 @@ Usage:
 
     python -m repo2docker https://github.com/you/your-repo
 """
+
 import getpass
 import json
 import logging
@@ -151,6 +152,7 @@ class Repo2Docker(Application):
             contentproviders.Dataverse,
             contentproviders.Hydroshare,
             contentproviders.Swhid,
+            contentproviders.CKAN,
             contentproviders.Mercurial,
             contentproviders.Git,
         ],
@@ -448,7 +450,7 @@ class Repo2Docker(Application):
     )
 
     base_image = Unicode(
-        "docker.io/library/buildpack-deps:bionic",
+        "docker.io/library/buildpack-deps:jammy",
         config=True,
         help="""
         Base image to use when building docker images.
@@ -676,8 +678,8 @@ class Repo2Docker(Application):
                 "notebook",
                 "--ip=0.0.0.0",
                 f"--port={container_port}",
-                f"--NotebookApp.custom_display_url=http://{host_name}:{host_port}",
-                "--NotebookApp.default_url=/lab",
+                f"--ServerApp.custom_display_url=http://{host_name}:{host_port}",
+                "--ServerApp.default_url=/lab",
             ]
         else:
             # run_cmd given by user, if port is also given then pass it on
